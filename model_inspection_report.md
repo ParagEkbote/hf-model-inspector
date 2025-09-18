@@ -1,59 +1,105 @@
 # 🤗 Model Inspector Report
-**Repository:** `openai/gpt-oss-20b`
-**Generated:** 2025-09-18 17:21:00 UTC
+**Repository:** `moonshotai/Kimi-K2-Instruct-0905`
+**Generated:** 2025-09-18 17:59:15 UTC
 
 ## 📊 Repository Stats
-- **Downloads:** 7,808,773
-- **Likes:** 3,541
-- **Author:** openai
-- **Private:** No
+- **Author:** moonshotai
+- **License:** other
 - **Gated:** No
+- **Private:** No
 - **Library:** transformers
 - **Pipeline Tag:** text-generation
-- **License:** apache-2.0
-
-- **Created:** 2025-08-04
-- **Last Modified:** 2025-08-26
+- **Likes:** 414
+- **Downloads:** 41,229
+- **Last Modified:** 2025-09-05
 
 ## 🏷️ Tags
-`transformers`, `safetensors`, `gpt_oss`, `text-generation`, `vllm`, `conversational`, `arxiv:2508.10925`, `license:apache-2.0`, `autotrain_compatible`, `endpoints_compatible`
+`transformers`, `safetensors`, `kimi_k2`, `text-generation`, `conversational`, `custom_code`, `license:other`, `autotrain_compatible`, `endpoints_compatible`, `fp8`, `region:us`
 
 ## 🏗️ Model Architecture
-- **Model Type:** `gpt_oss`
-- **Hidden Size:** 2,880
-- **Number of Layers:** 24
+- **Model Type:** `kimi_k2 (custom)`
+- **Hidden Size:** 7168
+- **Number of Layers:** 61
 - **Attention Heads:** 64
-- **Vocabulary Size:** 201,088
+- **Vocabulary Size:** 163840
 
-- **Intermediate Size:** 2,880
-- **Max Position Embeddings:** 131,072
-- **Key-Value Heads:** 8
-- **RoPE Theta:** 150,000
-- **Sliding Window:** 128
-- **Attention Dropout:** 0.0
-- **RoPE Scaling:** {'beta_fast': 32.0, 'beta_slow': 1.0, 'factor': 32.0, 'original_max_position_embeddings': 4096, 'rope_type': 'yarn', 'truncate': False}
+- **Intermediate Size:** 18432
+- **Rope Theta:** 50000.0
+- **Rope Scaling:** {'beta_fast': 1.0, 'beta_slow': 1.0, 'factor': 64.0, 'mscale': 1.0, 'mscale_all_dim': 1.0, 'original_max_position_embeddings': 4096, 'type': 'yarn'}
+- **Use Cache:** True
+- **Tie Word Embeddings:** False
+- **Num Key Value Heads:** 64
 
-- **Estimated Parameters:** ~3.5B (3,547,054,080)
-
-- **Quantization:** ✅ Detected (BitsAndBytes, MXFP4)
+- **Estimated Parameters:** ~38.78B (38784729088)
+- **Quantization:** ❌ Not detected (n/a)
+- **Precision / dtype hint:** fp16
 
 ## 📝 Tokenizer
-- **Model Max Length:** N/A
-- **Tokenizer Vocab Size:** 199998
+- **Tokenizer Type:** TikTokenTokenizer
+- **Tokenizer Vocab Size:** None
+- **Model Max Length:** 1000000000000000019884624838656
+- **Special Tokens:** 163584, 163585, 163586, 163587, 163588, 163590, 163591, 163593, 163594, 163595, 163596, 163597, 163598, 163599, 163601, 163838, 163839
+- **Truncation:** Not specified
 
 ## 📁 Repository Files
-- **Total Files:** 18
-- **Model File Formats:** PyTorch, SafeTensors
+- **Total Files:** 80
+- **Model File Formats:** SafeTensors
 - **SafeTensors:** ✅
-- **PyTorch:** ✅
+- **PyTorch:** ❌
 - **GGUF:** ❌
 - **ONNX:** ❌
 
 ### Model Files
 ```
-metal/model.bin
-model-00000-of-00002.safetensors
-model-00001-of-00002.safetensors
-model-00002-of-00002.safetensors
-original/model.safetensors
+model-00001-of-000062.safetensors
+model-00002-of-000062.safetensors
+model-00003-of-000062.safetensors
+model-00004-of-000062.safetensors
+model-00005-of-000062.safetensors
+model-00006-of-000062.safetensors
+model-00007-of-000062.safetensors
+model-00008-of-000062.safetensors
+model-00009-of-000062.safetensors
+model-00010-of-000062.safetensors
+model-00011-of-000062.safetensors
+model-00012-of-000062.safetensors
+model-00013-of-000062.safetensors
+model-00014-of-000062.safetensors
+model-00015-of-000062.safetensors
+model-00016-of-000062.safetensors
+model-00017-of-000062.safetensors
+model-00018-of-000062.safetensors
+model-00019-of-000062.safetensors
+model-00020-of-000062.safetensors
+model-00021-of-000062.safetensors
+model-00022-of-000062.safetensors
+model-00023-of-000062.safetensors
+model-00024-of-000062.safetensors
+model-00025-of-000062.safetensors
+model-00026-of-000062.safetensors
+model-00027-of-000062.safetensors
+model-00028-of-000062.safetensors
+model-00029-of-000062.safetensors
+model-00030-of-000062.safetensors
+model-00031-of-000062.safetensors
+model-00032-of-000062.safetensors
+model-00033-of-000062.safetensors
+model-00034-of-000062.safetensors
+model-00035-of-000062.safetensors
+model-00036-of-000062.safetensors
+model-00037-of-000062.safetensors
+model-00038-of-000062.safetensors
+model-00039-of-000062.safetensors
+model-00040-of-000062.safetensors
+model-00041-of-000062.safetensors
+model-00042-of-000062.safetensors
+model-00043-of-000062.safetensors
+model-00044-of-000062.safetensors
+model-00045-of-000062.safetensors
+model-00046-of-000062.safetensors
+model-00047-of-000062.safetensors
+model-00048-of-000062.safetensors
+model-00049-of-000062.safetensors
+model-00050-of-000062.safetensors
+... and 12 more
 ```

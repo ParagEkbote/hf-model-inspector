@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Smoke Test (BERT model)
+        run: |
+          python entrypoint.py --repo-id bert-base-uncased
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          
+  docker:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build Docker Action
+        run: docker build -t hf-model-inspector .
+
+      - name: Run Action (entrypoint.py)
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}:/app \
+            hf-model-inspector \
+            python /app/entrypoint.py --repo-id moonshotai/Kimi-K2-Instruct-0905 --json
+
+      - name: Check outputs
+        run: |
+          ls -lh
+          cat report.md

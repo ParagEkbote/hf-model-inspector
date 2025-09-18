@@ -1,5 +1,5 @@
-name: "HF Model Inspector"
-description: "Inspect Hugging Face models (config, tokenizer, quantization, etc.) and output a summary"
+name: "🤗HF Model Inspector"
+description: "Inspect Hugging Face models (config, tokenizer, quantization, parameters, etc.) and generate a Markdown summary (JSON optional)."
 author: "Your Name"
 branding:
   icon: "search"
@@ -10,12 +10,18 @@ inputs:
     description: "The Hugging Face model repository (e.g., openai/gpt-oss-20b)"
     required: true
   hf_token:
-    description: "Hugging Face token (required for gated/private repos)"
+    description: "Hugging Face access token (required for gated/private repos)"
     required: false
+  json_output:
+    description: "Set to true to also generate a JSON summary"
+    required: false
+    default: "false"
 
 outputs:
-  summary-path:
-    description: "Path to the generated model summary file"
+  summary-md:
+    description: "Path to the generated Markdown report"
+  summary-json:
+    description: "Path to the JSON report (only if json_output=true)"
 
 runs:
   using: "docker"
