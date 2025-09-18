@@ -1,6 +1,6 @@
 # 🤗 Model Inspector Report
 **Repository:** `moonshotai/Kimi-K2-Instruct-0905`
-**Generated:** 2025-09-18 17:59:15 UTC
+**Generated:** 2025-09-18 18:22:58 UTC
 
 ## 📊 Repository Stats
 - **Author:** moonshotai

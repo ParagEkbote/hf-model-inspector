@@ -712,7 +712,7 @@ def main():
 
     try:
         report = inspector.build_report(repo_id)
-        inspector.save_outputs(report, md_path=Path(args.output_md), json_path=Path(args.output_json))
+        inspector.save_outputs(report, md_path=Path(args.output_md))
 
         # if running in GH Actions, set outputs
         if os.getenv("GITHUB_ACTIONS") and os.getenv("GITHUB_OUTPUT"):
