@@ -25,7 +25,7 @@ jobs:
 
       - name: Smoke Test (BERT model)
         run: |
-          python entrypoint.py --repo-id bert-base-uncased
+          python entrypoint.py --repo-id google-bert/bert-base-uncased
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           
