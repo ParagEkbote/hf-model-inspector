@@ -1,0 +1,22 @@
+name: "HF Model Inspector"
+description: "Inspect Hugging Face models (config, tokenizer, quantization, etc.) and output a summary"
+author: "Your Name"
+branding:
+  icon: "search"
+  color: "blue"
+
+inputs:
+  repo_id:
+    description: "The Hugging Face model repository (e.g., openai/gpt-oss-20b)"
+    required: true
+  hf_token:
+    description: "Hugging Face token (required for gated/private repos)"
+    required: false
+
+outputs:
+  summary-path:
+    description: "Path to the generated model summary file"
+
+runs:
+  using: "docker"
+  image: "Dockerfile"

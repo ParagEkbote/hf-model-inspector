@@ -1,0 +1,26 @@
+name: Test HF Model Inspector
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test HF Model Inspector (public repo)
+        uses: ./
+        with:
+          repo_id: sshleifer/tiny-distilroberta-base
+      - name: Check output file exists
+        run: test -f model_summary.md && echo "✅ model_summary.md generated"
+      - name: Test HF Model Inspector (gated repo)
+        uses: ./
+        with:
+          repo_id: meta-llama/Llama-2-7b-hf
+          hf_token: ${{ secrets.HF_TOKEN }}
+
+
+
