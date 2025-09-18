@@ -10,17 +10,141 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      
       - name: Test HF Model Inspector (public repo)
+        id: public_test
         uses: ./
         with:
           repo_id: sshleifer/tiny-distilroberta-base
+          
       - name: Check output file exists
-        run: test -f model_summary.md && echo "✅ model_summary.md generated"
-      - name: Test HF Model Inspector (gated repo)
+        run: |
+          test -f model_inspection_report.md && echo "✅ model_inspection_report.md generated" || {
+            echo "❌ model_inspection_report.md not found"
+            ls -la
+            exit 1
+          }
+          
+      - name: Validate report content
+        run: |
+          if grep -q "Model Inspector Report" model_inspection_report.md; then
+            echo "✅ Report contains expected header"
+          else
+            echo "❌ Report missing expected header"
+            cat model_inspection_report.md
+            exit 1
+          fi
+          
+      - name: Check GitHub Actions outputs (public)
+        run: |
+          echo "Downloads: ${{ steps.public_test.outputs.downloads }}"
+          echo "Likes: ${{ steps.public_test.outputs.likes }}"
+          echo "Gated: ${{ steps.public_test.outputs.gated }}"
+          
+      - name: Test HF Model Inspector (gated repo) 
+        id: gated_test
         uses: ./
         with:
           repo_id: meta-llama/Llama-2-7b-hf
           hf_token: ${{ secrets.HF_TOKEN }}
+        continue-on-error: true  # Don't fail if token not available
+        
+      - name: Check gated repo handling
+        run: |
+          if [ "${{ steps.gated_test.outcome }}" = "success" ]; then
+            echo "✅ Gated repo test passed"
+            echo "Gated status: ${{ steps.gated_test.outputs.gated }}"
+          else
+            echo "⚠️ Gated repo test failed (expected if HF_TOKEN not available)"
+          fi
+          
+      - name: Test error handling (non-existent repo)
+        id: error_test
+        uses: ./
+        with:
+          repo_id: non-existent-user/non-existent-model
+        continue-on-error: true
+        
+      - name: Verify error handling
+        run: |
+          if [ "${{ steps.error_test.outcome }}" = "failure" ]; then
+            echo "✅ Error handling works correctly"
+          else
+            echo "❌ Expected failure for non-existent repo"
+            exit 1
+          fi
 
+  # Test with different model types
+  test-different-architectures:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - repo: "microsoft/DialoGPT-small"
+            description: "GPT-2 based model"
+          - repo: "sentence-transformers/all-MiniLM-L6-v2" 
+            description: "BERT-based sentence transformer"
+          - repo: "google/flan-t5-small"
+            description: "T5 model"
+            
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Test ${{ matrix.description }}
+        id: arch_test
+        uses: ./
+        with:
+          repo_id: ${{ matrix.repo }}
+          
+      - name: Validate architecture-specific report
+        run: |
+          echo "Testing ${{ matrix.description }}"
+          if test -f model_inspection_report.md; then
+            echo "✅ Report generated for ${{ matrix.repo }}"
+            # Check for key sections
+            if grep -q "Model Architecture" model_inspection_report.md; then
+              echo "✅ Architecture section found"
+            else
+              echo "⚠️ Architecture section missing"
+            fi
+            
+            if grep -q "Repository Stats" model_inspection_report.md; then
+              echo "✅ Stats section found"
+            else
+              echo "⚠️ Stats section missing"  
+            fi
+          else
+            echo "❌ Report not generated"
+            exit 1
+          fi
+          
+      - name: Display stats
+        run: |
+          echo "Model: ${{ matrix.repo }}"
+          echo "Downloads: ${{ steps.arch_test.outputs.downloads }}"
+          echo "Likes: ${{ steps.arch_test.outputs.likes }}"
 
-
+  # Test performance with larger models
+  test-performance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Test with larger model (performance check)
+        id: perf_test
+        uses: ./
+        with:
+          repo_id: "microsoft/DialoGPT-large"
+        timeout-minutes: 5  # Ensure it completes within reasonable time
+        
+      - name: Check performance
+        run: |
+          if [ "${{ steps.perf_test.outcome }}" = "success" ]; then
+            echo "✅ Performance test passed within timeout"
+            file_size=$(stat -c%s model_inspection_report.md)
+            echo "Report size: $file_size bytes"
+          else
+            echo "❌ Performance test failed or timed out"
+            exit 1
+          fi
