@@ -1,9 +1,5 @@
 # hf-model-inspector
 
-Here’s a polished `README.md` draft for your GitHub workflow based on your final `entrypoint.py` that produces a comprehensive model inspection report:
-
-# HF Transformers Model Inspector
-
 This repository provides a **GitHub Actions workflow** and a **Python CLI tool** (`entrypoint.py`) to inspect Hugging Face Transformers models. It generates a **comprehensive Markdown report** with key model details, including architecture, parameter counts, and more.
 
 ---
