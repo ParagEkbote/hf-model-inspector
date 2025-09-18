@@ -1,5 +1,5 @@
 name: "🤗HF Model Inspector"
-description: "Inspect Hugging Face models (config, tokenizer, quantization, parameters, etc.) and generate a Markdown summary (JSON optional)."
+description: "Inspect Hugging Face models and generate a Markdown summary."
 author: "Your Name"
 branding:
   icon: "search"
