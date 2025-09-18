@@ -2,9 +2,10 @@
 import os
 import json
 import argparse
+import logging
 from pathlib import Path
 from datetime import datetime
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Set, Tuple
 import requests
 from huggingface_hub import (
     hf_hub_download, 
@@ -16,323 +17,432 @@ from huggingface_hub import (
 )
 from dotenv import load_dotenv
 
-
-def safe_request_hf_api(api: HfApi, repo_id: str, token: str = None) -> Optional[Dict]:
-    """Safely request model info from HF API with error handling."""
-    try:
-        info = api.model_info(repo_id, token=token)
-        return {
-            'downloads': getattr(info, 'downloads', 0),
-            'likes': getattr(info, 'likes', 0),
-            'tags': getattr(info, 'tags', []),
-            'pipeline_tag': getattr(info, 'pipeline_tag', None),
-            'library_name': getattr(info, 'library_name', None),
-            'created_at': getattr(info, 'created_at', None),
-            'last_modified': getattr(info, 'last_modified', None),
-            'private': getattr(info, 'private', False),
-            'gated': getattr(info, 'gated', False),
-            'disabled': getattr(info, 'disabled', False),
-            'author': getattr(info, 'author', None),
-            'sha': getattr(info, 'sha', None),
-            'siblings': [s.rfilename for s in getattr(info, 'siblings', [])],
-        }
-    except Exception as e:
-        print(f"⚠️ Could not fetch model info from API: {e}")
-        return None
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 
-def load_json(repo_id: str, filename: str, token: str = None) -> Optional[Dict]:
-    """Download and load a JSON file from a Hugging Face repo."""
-    try:
-        path = hf_hub_download(repo_id=repo_id, filename=filename, token=token)
-        with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception as e:
-        print(f"⚠️ Could not load {filename}: {e}")
-        return None
-
-
-def check_file_exists(repo_id: str, filename: str, token: str = None) -> bool:
-    """Check if a file exists in the repo without downloading."""
-    try:
-        api = HfApi()
-        files = api.list_repo_files(repo_id, token=token)
-        return filename in files
-    except Exception:
-        return False
-
-
-def estimate_params(config: Dict) -> Optional[int]:
-    """Enhanced parameter estimation for various model architectures."""
-    try:
-        model_type = config.get("model_type", "").lower()
-        hidden_size = config.get("hidden_size") or config.get("d_model")
-        num_layers = config.get("num_hidden_layers") or config.get("n_layers") or config.get("num_layers")
-        vocab_size = config.get("vocab_size")
-        
-        if not all([hidden_size, num_layers, vocab_size]):
-            return None
-        
-        # Different estimation formulas for different architectures
-        if model_type in ["llama", "mistral", "qwen", "phi"]:
-            # Transformer with RMSNorm, SwiGLU, RoPE
-            intermediate_size = config.get("intermediate_size", hidden_size * 4)
-            num_attention_heads = config.get("num_attention_heads", 32)
-            
-            # Embedding + output projection
-            embed_params = vocab_size * hidden_size * 2
-            
-            # Per layer: attention + MLP + norms
-            attn_params = hidden_size * hidden_size * 4  # Q, K, V, O projections
-            mlp_params = hidden_size * intermediate_size * 2  # up and down projections
-            norm_params = hidden_size * 2  # RMSNorm weights
-            
-            layer_params = attn_params + mlp_params + norm_params
-            total_params = embed_params + (layer_params * num_layers)
-            
-        elif model_type in ["gpt2", "gpt_neox"]:
-            # Standard transformer
-            total_params = (
-                vocab_size * hidden_size +  # embeddings
-                num_layers * (
-                    4 * hidden_size * hidden_size +  # attention
-                    8 * hidden_size * hidden_size +  # MLP
-                    2 * hidden_size  # layer norms
-                ) +
-                vocab_size * hidden_size  # output projection
-            )
-        else:
-            # Generic estimation
-            total_params = (
-                vocab_size * hidden_size * 2 +  # embeddings + output
-                num_layers * hidden_size * hidden_size * 12  # rough approximation
-            )
-        
-        return int(total_params)
-    except Exception as e:
-        print(f"⚠️ Parameter estimation failed: {e}")
-        return None
-
-
-def format_size(size_bytes: int) -> str:
-    """Convert bytes to human readable format."""
-    for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
-        if size_bytes < 1024.0:
-            return f"{size_bytes:.1f} {unit}"
-        size_bytes /= 1024.0
-    return f"{size_bytes:.1f} PB"
-
-
-def analyze_model_files(siblings: List[str]) -> Dict[str, Any]:
-    """Analyze the model files to determine format, size, and other characteristics."""
-    analysis = {
-        'total_files': len(siblings),
-        'formats': set(),
-        'has_safetensors': False,
-        'has_pytorch': False,
-        'has_gguf': False,
-        'has_onnx': False,
-        'config_files': [],
-        'model_files': [],
-        'other_files': []
+class ModelInspector:
+    """Enhanced HuggingFace model inspector with comprehensive analysis."""
+    
+    QUANT_PRECISION_MAPPING = {
+        'int4': 'INT4',
+        'int8': 'INT8', 
+        'fp16': 'FP16',
+        'bf16': 'BF16',
+        'mxfp4': 'MXFP4',
+        '4bit': '4-bit',
+        '4-bit': '4-bit',
+        '8bit': '8-bit',
+        '8-bit': '8-bit'
     }
     
-    for file in siblings:
-        file_lower = file.lower()
-        
-        # Detect formats
-        if file_lower.endswith('.safetensors'):
-            analysis['has_safetensors'] = True
-            analysis['formats'].add('SafeTensors')
-            analysis['model_files'].append(file)
-        elif file_lower.endswith(('.bin', '.pt', '.pth')):
-            analysis['has_pytorch'] = True
-            analysis['formats'].add('PyTorch')
-            analysis['model_files'].append(file)
-        elif file_lower.endswith('.gguf'):
-            analysis['has_gguf'] = True
-            analysis['formats'].add('GGUF')
-            analysis['model_files'].append(file)
-        elif file_lower.endswith('.onnx'):
-            analysis['has_onnx'] = True
-            analysis['formats'].add('ONNX')
-            analysis['model_files'].append(file)
-        elif file_lower in ['config.json', 'tokenizer.json', 'tokenizer_config.json', 
-                           'generation_config.json', 'model.safetensors.index.json']:
-            analysis['config_files'].append(file)
-        else:
-            analysis['other_files'].append(file)
+    QUANT_METHOD_INDICATORS = {
+        'bnb': 'BitsAndBytes',
+        'gptq': 'GPTQ', 
+        'awq': 'AWQ',
+        'ggml': 'GGML/GGUF',
+        'gguf': 'GGML/GGUF'
+    }
     
-    analysis['formats'] = list(analysis['formats'])
-    return analysis
+    ARCHITECTURE_CONFIGS = {
+        'transformer_modern': {
+            'types': ['llama', 'mistral', 'qwen', 'phi'],
+            'params': ['intermediate_size', 'num_attention_heads'],
+            'multiplier': lambda h, l, i, v: v * h * 2 + l * (h * h * 4 + h * i * 2 + h * 2)
+        },
+        'transformer_classic': {
+            'types': ['gpt2', 'gpt_neox'],
+            'params': [],
+            'multiplier': lambda h, l, i, v: v * h * 2 + l * (h * h * 12 + h * 2)
+        }
+    }
+    
+    def __init__(self, token: Optional[str] = None):
+        """Initialize the model inspector."""
+        self.api = HfApi()
+        self.token = token
+        if token:
+            logger.info("🔐 Authenticating with HuggingFace token")
+            login(token=token, add_to_git_credential=False)
 
+    def _safe_api_request(self, repo_id: str) -> Optional[Dict]:
+        """Safely request model info from HF API with comprehensive error handling."""
+        try:
+            info = self.api.model_info(repo_id, token=self.token)
+            return {
+                attr: getattr(info, attr, default)
+                for attr, default in [
+                    ('downloads', 0), ('likes', 0), ('tags', []),
+                    ('pipeline_tag', None), ('library_name', None),
+                    ('created_at', None), ('last_modified', None),
+                    ('private', False), ('gated', False), ('disabled', False),
+                    ('author', None), ('sha', None)
+                ]
+            } | {'siblings': [s.rfilename for s in getattr(info, 'siblings', [])]}
+        except Exception as e:
+            logger.warning(f"Could not fetch model info from API: {e}")
+            return None
 
-def get_license_info(repo_id: str, token: str = None) -> Optional[str]:
-    """Try to get license information from the model card or repo."""
-    try:
-        # Try to download README.md or model card
-        readme_path = hf_hub_download(repo_id=repo_id, filename="README.md", token=token)
-        with open(readme_path, "r", encoding="utf-8") as f:
-            content = f.read()
+    def _load_json_file(self, repo_id: str, filename: str) -> Optional[Dict]:
+        """Download and load a JSON file from a Hugging Face repo."""
+        try:
+            path = hf_hub_download(repo_id=repo_id, filename=filename, token=self.token)
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            logger.warning(f"Could not load {filename}: {e}")
+            return None
+
+    def _estimate_parameters(self, config: Dict) -> Optional[int]:
+        """Enhanced parameter estimation for various model architectures."""
+        try:
+            model_type = config.get("model_type", "").lower()
+            required_params = {
+                'hidden_size': config.get("hidden_size") or config.get("d_model"),
+                'num_layers': config.get("num_hidden_layers") or config.get("n_layers") or config.get("num_layers"),
+                'vocab_size': config.get("vocab_size")
+            }
             
-        # Look for license in YAML frontmatter or content
-        if "license:" in content.lower():
+            if not all(required_params.values()):
+                return None
+            
+            h, l, v = required_params.values()
+            
+            # Find matching architecture
+            for arch_name, arch_config in self.ARCHITECTURE_CONFIGS.items():
+                if model_type in arch_config['types']:
+                    intermediate_size = config.get("intermediate_size", h * 4)
+                    return int(arch_config['multiplier'](h, l, intermediate_size, v))
+            
+            # Generic estimation fallback
+            return int(v * h * 2 + l * h * h * 12)
+            
+        except Exception as e:
+            logger.warning(f"Parameter estimation failed: {e}")
+            return None
+
+    def _detect_quantization(self, config: Dict) -> Tuple[bool, Set[str]]:
+        """Detect quantization types with improved logic."""
+        detected_types = set()
+        
+        # Combine all searchable text
+        search_targets = [
+            (str(config), "config"),
+            (config.get('model_type', ''), "model_type")
+        ]
+        
+        for text, source in search_targets:
+            text_lower = text.lower()
+            
+            # Check precision types
+            for indicator, quant_type in self.QUANT_PRECISION_MAPPING.items():
+                if indicator in text_lower:
+                    detected_types.add(quant_type)
+            
+            # Check quantization methods
+            for indicator, method in self.QUANT_METHOD_INDICATORS.items():
+                if indicator in text_lower:
+                    detected_types.add(method)
+            
+            # Check for generic quantization indicators
+            generic_indicators = ['quant', 'bits']
+            for indicator in generic_indicators:
+                if indicator in text_lower and not detected_types:
+                    detected_types.add('Quantized' if indicator == 'quant' else 'Multi-bit')
+        
+        # Special case: quantization_config presence
+        if config.get('quantization_config'):
+            detected_types.add('BitsAndBytes')
+        
+        return len(detected_types) > 0, detected_types
+
+    def _analyze_files(self, siblings: List[str]) -> Dict[str, Any]:
+        """Analyze repository files to determine formats and characteristics."""
+        file_mappings = {
+            'safetensors': ('.safetensors', 'SafeTensors'),
+            'pytorch': (('.bin', '.pt', '.pth'), 'PyTorch'), 
+            'gguf': ('.gguf', 'GGUF'),
+            'onnx': ('.onnx', 'ONNX')
+        }
+        
+        analysis = {
+            'total_files': len(siblings),
+            'formats': set(),
+            'model_files': [],
+            'config_files': [],
+            'other_files': []
+        }
+        
+        # Add individual format flags
+        for format_key in file_mappings:
+            analysis[f'has_{format_key}'] = False
+        
+        config_file_names = {
+            'config.json', 'tokenizer.json', 'tokenizer_config.json',
+            'generation_config.json', 'model.safetensors.index.json'
+        }
+        
+        for file in siblings:
+            file_lower = file.lower()
+            categorized = False
+            
+            # Check each format type
+            for format_key, (extensions, format_name) in file_mappings.items():
+                extensions = extensions if isinstance(extensions, tuple) else (extensions,)
+                if any(file_lower.endswith(ext) for ext in extensions):
+                    analysis[f'has_{format_key}'] = True
+                    analysis['formats'].add(format_name)
+                    analysis['model_files'].append(file)
+                    categorized = True
+                    break
+            
+            if not categorized:
+                if file_lower in config_file_names:
+                    analysis['config_files'].append(file)
+                else:
+                    analysis['other_files'].append(file)
+        
+        analysis['formats'] = list(analysis['formats'])
+        return analysis
+
+    def _get_license_info(self, repo_id: str) -> str:
+        """Extract license information from model card."""
+        try:
+            readme_path = hf_hub_download(repo_id=repo_id, filename="README.md", token=self.token)
+            with open(readme_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            
+            # Look for license in YAML frontmatter
             lines = content.split('\n')
             for line in lines:
                 if line.strip().lower().startswith('license:'):
                     return line.split(':', 1)[1].strip()
+            
+            return "Unknown"
+        except Exception:
+            return "Unknown"
+
+    def _format_parameter_count(self, params: int) -> str:
+        """Format parameter count in human readable form."""
+        if params >= 1_000_000_000:
+            return f"{params / 1_000_000_000:.1f}B"
+        elif params >= 1_000_000:
+            return f"{params / 1_000_000:.1f}M"
+        else:
+            return f"{params:,}"
+
+    def _build_report_sections(self, repo_id: str, config: Dict, tokenizer: Dict, 
+                              model_info: Dict, file_analysis: Dict, license_info: str) -> List[str]:
+        """Build comprehensive markdown report sections."""
+        sections = []
         
-        return "Unknown"
-    except Exception:
-        return "Unknown"
-
-
-def format_summary(repo_id: str, config: Dict, tokenizer: Dict, 
-                  model_info: Dict, file_analysis: Dict, license_info: str) -> str:
-    """Format a comprehensive Markdown summary of model details."""
-    lines = [
-        f"# 🤗 Model Inspector Report",
-        f"**Repository:** `{repo_id}`",
-        f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}",
-        ""
-    ]
-
-    # Basic Model Information
-    if model_info:
-        lines.extend([
-            "## 📊 Repository Stats",
-            f"- **Downloads:** {model_info.get('downloads', 0):,}",
-            f"- **Likes:** {model_info.get('likes', 0):,}",
-            f"- **Author:** {model_info.get('author', 'N/A')}",
-            f"- **Private:** {'Yes' if model_info.get('private') else 'No'}",
-            f"- **Gated:** {'Yes' if model_info.get('gated') else 'No'}",
-            f"- **Library:** {model_info.get('library_name', 'N/A')}",
-            f"- **Pipeline Tag:** {model_info.get('pipeline_tag', 'N/A')}",
-            f"- **License:** {license_info}",
+        # Header section
+        sections.extend([
+            f"# 🤗 Model Inspector Report",
+            f"**Repository:** `{repo_id}`",
+            f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}",
             ""
         ])
-
-        if model_info.get('created_at'):
-            lines.append(f"- **Created:** {model_info['created_at'].strftime('%Y-%m-%d')}")
-        if model_info.get('last_modified'):
-            lines.append(f"- **Last Modified:** {model_info['last_modified'].strftime('%Y-%m-%d')}")
         
-        lines.append("")
-
-        # Tags
-        if model_info.get('tags'):
-            tags_str = ", ".join([f"`{tag}`" for tag in model_info['tags'][:10]])  # Limit to first 10
-            lines.extend([
-                "## 🏷️ Tags",
-                tags_str,
-                ""
-            ])
-
-    # Model Architecture
-    if config:
-        lines.extend([
-            "## 🏗️ Model Architecture",
-            f"- **Model Type:** `{config.get('model_type', 'N/A')}`",
-            f"- **Hidden Size:** {config.get('hidden_size', 'N/A'):,}" if config.get('hidden_size') else "- **Hidden Size:** N/A",
-            f"- **Number of Layers:** {config.get('num_hidden_layers', 'N/A')}" if config.get('num_hidden_layers') else "- **Number of Layers:** N/A",
-            f"- **Attention Heads:** {config.get('num_attention_heads', 'N/A')}" if config.get('num_attention_heads') else "- **Attention Heads:** N/A",
-            f"- **Vocabulary Size:** {config.get('vocab_size', 'N/A'):,}" if config.get('vocab_size') else "- **Vocabulary Size:** N/A",
-            ""
-        ])
-
-        # Additional architecture details
-        additional_fields = [
-            ('intermediate_size', 'Intermediate Size'),
-            ('max_position_embeddings', 'Max Position Embeddings'), 
-            ('num_key_value_heads', 'Key-Value Heads'),
-            ('rope_theta', 'RoPE Theta'),
-            ('sliding_window', 'Sliding Window'),
-            ('attention_dropout', 'Attention Dropout'),
-            ('hidden_dropout', 'Hidden Dropout'),
-            ('rope_scaling', 'RoPE Scaling')
-        ]
-
-        extra_details = []
-        for field, label in additional_fields:
-            if field in config:
-                value = config[field]
-                if isinstance(value, (int, float)):
-                    if isinstance(value, int) and value > 1000:
-                        extra_details.append(f"- **{label}:** {value:,}")
-                    else:
-                        extra_details.append(f"- **{label}:** {value}")
+        # Repository stats section
+        if model_info:
+            stats_data = [
+                ("Downloads", f"{model_info.get('downloads', 0):,}"),
+                ("Likes", f"{model_info.get('likes', 0):,}"),
+                ("Author", model_info.get('author', 'N/A')),
+                ("Private", 'Yes' if model_info.get('private') else 'No'),
+                ("Gated", 'Yes' if model_info.get('gated') else 'No'),
+                ("Library", model_info.get('library_name', 'N/A')),
+                ("Pipeline Tag", model_info.get('pipeline_tag', 'N/A')),
+                ("License", license_info)
+            ]
+            
+            sections.extend(["## 📊 Repository Stats"] + 
+                          [f"- **{label}:** {value}" for label, value in stats_data] + 
+                          [""])
+            
+            # Add dates if available
+            date_fields = [
+                ('created_at', 'Created'),
+                ('last_modified', 'Last Modified')
+            ]
+            
+            for field, label in date_fields:
+                if model_info.get(field):
+                    sections.append(f"- **{label}:** {model_info[field].strftime('%Y-%m-%d')}")
+            
+            sections.append("")
+            
+            # Tags section
+            if model_info.get('tags'):
+                tags_str = ", ".join([f"`{tag}`" for tag in model_info['tags'][:10]])
+                sections.extend(["## 🏷️ Tags", tags_str, ""])
+        
+        # Architecture section
+        if config:
+            sections.append("## 🏗️ Model Architecture")
+            
+            # Basic architecture info
+            basic_fields = [
+                ('model_type', 'Model Type', lambda x: f"`{x}`"),
+                ('hidden_size', 'Hidden Size', lambda x: f"{x:,}" if isinstance(x, int) else str(x)),
+                ('num_hidden_layers', 'Number of Layers', str),
+                ('num_attention_heads', 'Attention Heads', str),
+                ('vocab_size', 'Vocabulary Size', lambda x: f"{x:,}" if isinstance(x, int) else str(x))
+            ]
+            
+            for field, label, formatter in basic_fields:
+                if field in config and config[field] is not None:
+                    sections.append(f"- **{label}:** {formatter(config[field])}")
                 else:
-                    extra_details.append(f"- **{label}:** {value}")
-        
-        if extra_details:
-            lines.extend(extra_details + [""])
-
-        # Parameter estimation
-        params = estimate_params(config)
-        if params:
-            if params >= 1_000_000_000:
-                param_str = f"{params / 1_000_000_000:.1f}B"
-            elif params >= 1_000_000:
-                param_str = f"{params / 1_000_000:.1f}M"
+                    sections.append(f"- **{label}:** N/A")
+            
+            sections.append("")
+            
+            # Additional architecture details
+            additional_fields = [
+                ('intermediate_size', 'Intermediate Size'),
+                ('max_position_embeddings', 'Max Position Embeddings'), 
+                ('num_key_value_heads', 'Key-Value Heads'),
+                ('rope_theta', 'RoPE Theta'),
+                ('sliding_window', 'Sliding Window'),
+                ('attention_dropout', 'Attention Dropout'),
+                ('hidden_dropout', 'Hidden Dropout'),
+                ('rope_scaling', 'RoPE Scaling')
+            ]
+            
+            extra_details = []
+            for field, label in additional_fields:
+                if field in config:
+                    value = config[field]
+                    formatted_value = f"{value:,}" if isinstance(value, int) and value > 1000 else str(value)
+                    extra_details.append(f"- **{label}:** {formatted_value}")
+            
+            if extra_details:
+                sections.extend(extra_details + [""])
+            
+            # Parameter estimation
+            params = self._estimate_parameters(config)
+            if params:
+                param_str = self._format_parameter_count(params)
+                sections.extend([
+                    f"- **Estimated Parameters:** ~{param_str} ({params:,})",
+                    ""
+                ])
+            
+            # Quantization detection
+            is_quantized, detected_types = self._detect_quantization(config)
+            if is_quantized:
+                quant_types_str = ', '.join(sorted(detected_types))
+                sections.append(f"- **Quantization:** ✅ Detected ({quant_types_str})")
             else:
-                param_str = f"{params:,}"
-            lines.extend([
-                f"- **Estimated Parameters:** ~{param_str} ({params:,})",
+                sections.append(f"- **Quantization:** ❌ Not detected")
+            
+            sections.append("")
+        else:
+            sections.extend(["## ⚠️ Model Architecture", "Could not load `config.json`", ""])
+        
+        # Tokenizer section
+        if tokenizer:
+            sections.extend([
+                "## 📝 Tokenizer",
+                f"- **Model Max Length:** {tokenizer.get('model_max_length', 'N/A'):,}" if isinstance(tokenizer.get('model_max_length'), int) else f"- **Model Max Length:** {tokenizer.get('model_max_length', 'N/A')}",
+                f"- **Tokenizer Vocab Size:** {len(tokenizer.get('model', {}).get('vocab', {})) if tokenizer.get('model', {}).get('vocab') else 'N/A'}",
                 ""
             ])
-
-        # Quantization detection
-        quant_indicators = ['bits', 'quant', 'int4', 'int8', 'fp16', 'bf16']
-        is_quantized = any(
-            any(indicator in str(v).lower() for indicator in quant_indicators)
-            for v in config.values()
-        ) or any(indicator in config.get('model_type', '').lower() for indicator in quant_indicators)
         
-        lines.extend([
-            f"- **Quantization:** {'✅ Detected' if is_quantized else '❌ Not detected'}",
-            ""
+        # File analysis section
+        format_indicators = [
+            ('SafeTensors', 'has_safetensors'),
+            ('PyTorch', 'has_pytorch'),
+            ('GGUF', 'has_gguf'),
+            ('ONNX', 'has_onnx')
+        ]
+        
+        sections.extend([
+            "## 📁 Repository Files",
+            f"- **Total Files:** {file_analysis['total_files']}",
+            f"- **Model File Formats:** {', '.join(file_analysis['formats']) if file_analysis['formats'] else 'None detected'}"
         ])
-    else:
-        lines.extend([
-            "## ⚠️ Model Architecture",
-            "Could not load `config.json`",
-            ""
+        
+        sections.extend([
+            f"- **{name}:** {'✅' if file_analysis.get(key) else '❌'}"
+            for name, key in format_indicators
         ])
+        
+        sections.append("")
+        
+        # Model files listing
+        if file_analysis['model_files']:
+            sections.extend(["### Model Files", "```"])
+            display_files = sorted(file_analysis['model_files'])[:20]
+            sections.extend(display_files)
+            
+            if len(file_analysis['model_files']) > 20:
+                sections.append(f"... and {len(file_analysis['model_files']) - 20} more")
+            
+            sections.extend(["```", ""])
+        
+        return sections
 
-    # Tokenizer information
-    if tokenizer:
-        lines.extend([
-            "## 📝 Tokenizer",
-            f"- **Model Max Length:** {tokenizer.get('model_max_length', 'N/A'):,}" if isinstance(tokenizer.get('model_max_length'), int) else f"- **Model Max Length:** {tokenizer.get('model_max_length', 'N/A')}",
-            f"- **Tokenizer Vocab Size:** {len(tokenizer.get('model', {}).get('vocab', {})) if tokenizer.get('model', {}).get('vocab') else 'N/A'}",
-            ""
-        ])
+    def inspect_model(self, repo_id: str) -> str:
+        """Main inspection method that orchestrates the analysis."""
+        logger.info(f"🔍 Inspecting model: {repo_id}")
+        
+        # Verify repository exists
+        if not repo_exists(repo_id, token=self.token):
+            raise ValueError(f"Repository {repo_id} not found or not accessible")
+        
+        # Gather information
+        logger.info("📥 Fetching model information...")
+        model_info = self._safe_api_request(repo_id)
+        
+        logger.info("📥 Loading configuration files...")
+        config = self._load_json_file(repo_id, "config.json")
+        tokenizer = self._load_json_file(repo_id, "tokenizer.json")
+        
+        logger.info("📥 Analyzing repository files...")
+        siblings = model_info.get('siblings', []) if model_info else []
+        file_analysis = self._analyze_files(siblings)
+        
+        logger.info("📥 Fetching license information...")
+        license_info = self._get_license_info(repo_id)
+        
+        # Generate report
+        logger.info("📝 Generating comprehensive report...")
+        sections = self._build_report_sections(
+            repo_id, config, tokenizer, model_info, file_analysis, license_info
+        )
+        
+        return "\n".join(sections)
 
-    # File analysis
-    lines.extend([
-        "## 📁 Repository Files",
-        f"- **Total Files:** {file_analysis['total_files']}",
-        f"- **Model File Formats:** {', '.join(file_analysis['formats']) if file_analysis['formats'] else 'None detected'}",
-        f"- **SafeTensors:** {'✅' if file_analysis['has_safetensors'] else '❌'}",
-        f"- **PyTorch:** {'✅' if file_analysis['has_pytorch'] else '❌'}",
-        f"- **GGUF:** {'✅' if file_analysis['has_gguf'] else '❌'}",
-        f"- **ONNX:** {'✅' if file_analysis['has_onnx'] else '❌'}",
-        ""
-    ])
-
-    # File breakdown
-    if file_analysis['model_files']:
-        lines.extend([
-            "### Model Files",
-            "```"
-        ])
-        for file in sorted(file_analysis['model_files'])[:20]:  # Limit to first 20
-            lines.append(file)
-        if len(file_analysis['model_files']) > 20:
-            lines.append(f"... and {len(file_analysis['model_files']) - 20} more")
-        lines.extend(["```", ""])
-
-    return "\n".join(lines)
+    def save_report(self, report: str, output_path: Path = Path("model_inspection_report.md")) -> Dict[str, Any]:
+        """Save report and return GitHub Actions outputs."""
+        output_path.write_text(report, encoding="utf-8")
+        
+        # Extract outputs for GitHub Actions
+        outputs = {}
+        lines = report.split('\n')
+        
+        for line in lines:
+            if '**Downloads:**' in line:
+                try:
+                    outputs['downloads'] = int(line.split('**Downloads:**')[1].strip().replace(',', ''))
+                except (ValueError, IndexError):
+                    outputs['downloads'] = 0
+            elif '**Likes:**' in line:
+                try:
+                    outputs['likes'] = int(line.split('**Likes:**')[1].strip().replace(',', ''))
+                except (ValueError, IndexError):
+                    outputs['likes'] = 0
+            elif '**Gated:**' in line:
+                outputs['gated'] = 'Yes' in line
+        
+        return outputs, output_path
 
 
 def main():
@@ -352,59 +462,35 @@ def main():
         repo_id = args.repo_id
         hf_token = hf_token or args.hf_token
 
-    print(f"🔍 Inspecting model: {repo_id}")
-
-    # Authenticate if token provided
-    api = HfApi()
-    if hf_token:
-        print("🔐 Using Hugging Face token for authentication")
-        login(token=hf_token, add_to_git_credential=False)
-
     try:
-        # Check if repo exists and is accessible
-        if not repo_exists(repo_id, token=hf_token):
-            print(f"❌ Repository {repo_id} not found or not accessible")
-            exit(1)
-
-        # Gather all information
-        print("📥 Fetching model information...")
-        model_info = safe_request_hf_api(api, repo_id, hf_token)
+        # Initialize inspector
+        inspector = ModelInspector(token=hf_token)
         
-        print("📥 Loading configuration files...")
-        config = load_json(repo_id, "config.json", token=hf_token)
-        tokenizer = load_json(repo_id, "tokenizer.json", token=hf_token)
+        # Generate report
+        report = inspector.inspect_model(repo_id)
         
-        print("📥 Analyzing repository files...")
-        siblings = model_info.get('siblings', []) if model_info else []
-        file_analysis = analyze_model_files(siblings)
-        
-        print("📥 Fetching license information...")
-        license_info = get_license_info(repo_id, hf_token)
-
-        # Generate comprehensive summary
-        summary = format_summary(repo_id, config, tokenizer, model_info, file_analysis, license_info)
+        # Display report
         print("\n" + "="*80)
-        print(summary)
+        print(report)
         print("="*80)
+        
+        # Save report and get outputs
+        outputs, output_path = inspector.save_report(report)
+        
+        # Single success print statement
+        print(f"\n✅ Comprehensive report saved to {output_path.resolve()}")
 
-        # Save to artifact
-        out_path = Path("model_inspection_report.md")
-        out_path.write_text(summary, encoding="utf-8")
-        print(f"\n✅ Comprehensive report saved to {out_path.resolve()}")
-
-        # Set GitHub Actions output if running in GA
+        # Set GitHub Actions outputs if running in GA
         if os.getenv("GITHUB_ACTIONS"):
             with open(os.environ["GITHUB_OUTPUT"], "a") as f:
-                f.write(f"report-path={out_path}\n")
-                if model_info:
-                    f.write(f"downloads={model_info.get('downloads', 0)}\n")
-                    f.write(f"likes={model_info.get('likes', 0)}\n")
-                    f.write(f"gated={'true' if model_info.get('gated') else 'false'}\n")
+                f.write(f"report-path={output_path}\n")
+                for key, value in outputs.items():
+                    f.write(f"{key}={value}\n")
 
     except Exception as e:
-        print(f"❌ Error during inspection: {e}")
+        logger.error(f"Error during inspection: {e}")
         exit(1)
 
 
-# Entry point for GitHub Actions - no if __name__ == "__main__" needed
+# Entry point for GitHub Actions
 main()

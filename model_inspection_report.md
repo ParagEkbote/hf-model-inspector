@@ -1,10 +1,10 @@
 # 🤗 Model Inspector Report
 **Repository:** `openai/gpt-oss-20b`
-**Generated:** 2025-09-18 15:51:46 UTC
+**Generated:** 2025-09-18 17:21:00 UTC
 
 ## 📊 Repository Stats
 - **Downloads:** 7,808,773
-- **Likes:** 3,540
+- **Likes:** 3,541
 - **Author:** openai
 - **Private:** No
 - **Gated:** No
@@ -35,7 +35,7 @@
 
 - **Estimated Parameters:** ~3.5B (3,547,054,080)
 
-- **Quantization:** ✅ Detected
+- **Quantization:** ✅ Detected (BitsAndBytes, MXFP4)
 
 ## 📝 Tokenizer
 - **Model Max Length:** N/A
