@@ -22,4 +22,4 @@ COPY entrypoint.py /entrypoint.py
 RUN chmod +x /entrypoint.py
 
 # GitHub Actions entrypoint
-ENTRYPOINT ["/entrypoint.py"]
+ENTRYPOINT ["python","/entrypoint.py"]
