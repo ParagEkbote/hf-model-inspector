@@ -1,11 +1,7 @@
-# Smoke test gh-action for the published workflow
 name: Test HF Model Inspector
 
 on:
-  workflow_dispatch: # lets you trigger manually
-  push:
-    branches:
-      - main
+  workflow_dispatch:
 
 jobs:
   inspect:
@@ -17,4 +13,5 @@ jobs:
       - name:  🤗HF Model Inspector
         uses: ParagEkbote/hf-transformers-model-inspector@v1.0.2
         with:
-          repo-id: google-bert/bert-base-uncased
+          repo_id: google-bert/bert-base-uncased
+          json_output: false
