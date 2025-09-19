@@ -1,4 +1,4 @@
-name: Test HF Model Inspector
+name: Test HF Model Inspector(GH Marketplace)
 
 on:
   workflow_dispatch:

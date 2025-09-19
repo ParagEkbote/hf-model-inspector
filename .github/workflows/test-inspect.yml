@@ -1,4 +1,4 @@
-name: Test HF Model Inspector
+name: Test HF Model Inspector(Smoke Test)
 
 on:
   push:
