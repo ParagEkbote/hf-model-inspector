@@ -14,7 +14,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Run HF Model Inspector
+      - name:  🤗HF Model Inspector
         uses: ParagEkbote/hf-transformers-model-inspector@v1.0.2
         with:
           repo-id: google-bert/bert-base-uncased
