@@ -1,0 +1,56 @@
+[build-system]
+requires = ["hatchling>=1.22.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "hf-model-inspector"
+version = "0.1.0"
+description = "A package and gh-action to generate quality reports on Hugging Face model stats and usage, addressing ambiguity in open model releases."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "Apache-2.0" }
+authors = [
+  { name = "Parag Ekbote", email = "23150020.dypsst@dpu.edu.in" }
+]
+
+dependencies = [
+  "huggingface_hub>=0.24.0",
+  "transformers>=4.21.0",
+  "python-dotenv>=1.0.0",
+  "rich>=13.9.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/ParagEkbote/hf-model-inspector"
+Repository = "https://github.com/ParagEkbote/hf-model-inspector"
+Issues = "https://github.com/ParagEkbote/hf-model-inspector/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/hf_model_inspector"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py39"
+select = ["E", "F", "B", "I", "UP"]
+ignore = ["E501"]
+
+[tool.ty]
+strict = true
+disallow_untyped_defs = true
+warn_return_any = true
+warn_unused_ignores = true
+
+[tool.hatch.envs.default]
+dependencies = [
+  "ruff",
+  "ty",
+  "pytest",
+  "pytest-asyncio",
+  "pre-commit",
+]
+
+[tool.hatch.envs.default.scripts]
+lint = "ruff check . && ty src"
+format = "ruff format ."
+test = "pytest -v"
+precommit = "pre-commit run --all-files"
