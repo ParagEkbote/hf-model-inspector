@@ -9,35 +9,32 @@ description = "A package and gh-action to generate quality reports on Hugging Fa
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "Apache-2.0" }
-classifiers = [
-    "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: Apache Software License",
-    "Operating System :: OS Independent"
-]
 authors = [
   { name = "Parag Ekbote", email = "paragekbote23@gmail.com" }
 ]
-
 dependencies = [
   "huggingface_hub>=0.24.0",
   "transformers>=4.21.0",
   "python-dotenv>=1.0.0",
-  "rich>=13.9.0"
+  "rich>=13.9.0",
 ]
 
 [project.urls]
-Homepage = "https://github.com/ParagEkbote/hf-model-inspector"
-Repository = "https://github.com/ParagEkbote/hf-model-inspector"
-Issues = "https://github.com/ParagEkbote/hf-model-inspector/issues"
+homepage = "https://github.com/ParagEkbote/hf-model-inspector"
+repository = "https://github.com/ParagEkbote/hf-model-inspector"
+issues = "https://github.com/ParagEkbote/hf-model-inspector/issues"
+
+[tool.hatch.build]
+source-directories = ["src"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/hf_model_inspector"]
+packages = ["hf_model_inspector"]
 
 [tool.ruff]
 line-length = 88
-target-version = "py39"
+target-version = ["py39"]
 select = ["E", "F", "B", "I", "UP"]
-ignore = ["E501"]
+ignore = ["E501"]  # optional, keep if you want to ignore long-line warnings
 
 [tool.ty]
 strict = true
@@ -52,11 +49,11 @@ dependencies = [
   "pytest",
   "pytest-asyncio",
   "pre-commit",
-  "twine"
+  "twine",
 ]
 
 [tool.hatch.envs.default.scripts]
-lint = "ruff check . && ty src"
-format = "ruff format ."
+lint = "ruff check src"
+format = "ruff format src"
 test = "pytest -v"
 precommit = "pre-commit run --all-files"
