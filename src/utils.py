@@ -1,30 +1,27 @@
-# utils.py
-from typing import Optional
+from typing import Any, Optional
 
 def humanize_params(n: Optional[int]) -> str:
-    """Convert large integer param counts into human-readable format."""
+    """Convert a large integer param count into a human-readable format (e.g., 1.23B)."""
     if n is None:
         return "N/A"
-    if n >= 1_000_000_000_000:
-        return f"~{n/1_000_000_000_000:.2f}T"
-    if n >= 1_000_000_000:
-        return f"~{n/1_000_000_000:.2f}B"
-    if n >= 1_000_000:
-        return f"~{n/1_000_000:.2f}M"
-    return str(n)
+    units = ["", "K", "M", "B", "T"]
+    k = 0
+    while n >= 1000 and k < len(units) - 1:
+        n /= 1000
+        k += 1
+    return f"{n:.2f}{units[k]}"
 
-def safe_get(d: dict, *keys, default=None):
-    """Safe nested dictionary access."""
-    for k in keys:
-        if d is None:
+def safe_get(d: dict, *keys, default=None) -> Any:
+    """Safely access nested dict keys: safe_get(cfg, 'a', 'b', 'c')."""
+    for key in keys:
+        if not isinstance(d, dict) or key not in d:
             return default
-        if k in d:
-            return d[k]
-    return default
+        d = d[key]
+    return d
 
-def field(cfg, *names):
-    """Helper to get nested fields with fallback."""
-        for n in names:
-            if n in cfg and cfg[n] is not None:
-                    return cfg[n]
-            return None
+def field(cfg: dict, *names: str, default=None) -> Any:
+    """Return the first existing non-None field from given names."""
+    for name in names:
+        if name in cfg and cfg[name] is not None:
+            return cfg[name]
+    return default
