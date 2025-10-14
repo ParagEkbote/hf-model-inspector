@@ -9,9 +9,11 @@ description = "A package and gh-action to generate quality reports on Hugging Fa
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "Apache-2.0" }
-classifiers = {
-    
-}
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent"
+]
 authors = [
   { name = "Parag Ekbote", email = "paragekbote23@gmail.com" }
 ]
@@ -20,7 +22,7 @@ dependencies = [
   "huggingface_hub>=0.24.0",
   "transformers>=4.21.0",
   "python-dotenv>=1.0.0",
-  "rich>=13.9.0",
+  "rich>=13.9.0"
 ]
 
 [project.urls]
@@ -29,7 +31,7 @@ Repository = "https://github.com/ParagEkbote/hf-model-inspector"
 Issues = "https://github.com/ParagEkbote/hf-model-inspector/issues"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/hf_model_inspector"]
+packages = ["hf_model_inspector"]
 
 [tool.ruff]
 line-length = 88
@@ -50,7 +52,7 @@ dependencies = [
   "pytest",
   "pytest-asyncio",
   "pre-commit",
-  "twine",
+  "twine"
 ]
 
 [tool.hatch.envs.default.scripts]
