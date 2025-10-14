@@ -3,7 +3,6 @@ from huggingface_hub import (
     HfApi,
     hf_hub_download,
     HfFolder,
-    RepositoryNotFoundError,
     whoami,
 )
 import json
@@ -47,10 +46,11 @@ class HFModelLoader:
     def fetch_model_info(self, repo_id: str) -> Optional[Dict[str, Any]]:
         try:
             info = self.api.model_info(repo_id, token=self.token)
-        except RepositoryNotFoundError:
-            logger.error(f"Repository not found: {repo_id}")
-            return None
         except Exception as e:
+            error_msg = str(e).lower()
+            if "not found" in error_msg or "404" in error_msg:
+                logger.error(f"Repository not found: {repo_id}")
+        else:
             logger.warning(f"Failed to fetch model info for {repo_id}: {e}")
             return None
 
