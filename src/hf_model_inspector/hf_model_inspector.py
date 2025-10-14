@@ -66,3 +66,48 @@ def get_lora_info(repo_id: str, token: Optional[str] = None) -> Optional[Dict[st
         "lora_module_names": list(lora_modules.keys()),
     }
 
+def recommend_models_for_gpu(gpu_specs: Dict[str, any]) -> List[str]:
+    """
+    Recommend model sizes/types based on GPU specs.
+    
+    gpu_specs: {
+        "name": str,                # e.g., "A100", "RTX3090"
+        "memory_gb": int,           # VRAM in GB
+        "compute_capability": float # CUDA compute capability
+    }
+    
+    Returns a list of recommended model "size" categories.
+    """
+    memory_gb = gpu_specs.get("memory_gb", 8)
+    compute_cap = gpu_specs.get("compute_capability", 7.0)
+    gpu_name = gpu_specs.get("name", "").lower()
+    
+    recommendations = []
+
+    # Low memory GPUs (8–12GB)
+    if memory_gb < 12:
+        recommendations.append("small")   # e.g., distilled or tiny models
+    # Mid-range GPUs (12–24GB)
+    if 12 <= memory_gb < 24:
+        recommendations.append("medium")  # e.g., base LLMs, 3–7B models
+    # High-end GPUs (24GB+)
+    if memory_gb >= 24:
+        recommendations.append("large")   # e.g., 13B+ models or multi-GPU setups
+
+    # Adjust recommendations by GPU type
+    if "a100" in gpu_name or "h100" in gpu_name:
+        # Tensor core GPUs: can handle larger models efficiently
+        if "medium" not in recommendations:
+            recommendations.append("medium")
+        if "large" not in recommendations:
+            recommendations.append("large")
+    elif "rtx" in gpu_name or "v100" in gpu_name:
+        # Consumer/older GPUs: mostly small or medium
+        if "large" in recommendations:
+            recommendations.remove("large")
+
+    # Always include a fallback
+    if not recommendations:
+        recommendations.append("small")
+
+    return recommendations

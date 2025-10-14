@@ -13,11 +13,12 @@ from .analyzer import (
 from .formatter import format_markdown, save_outputs
 
 # Main API functions
-from .main import (
+from .hf_model_inspector import (
     get_model_report_json,
     get_model_report_md,
     save_model_report,
     get_lora_info,
+    recommend_models_for_gpu
 )
 
 # Public API
@@ -27,6 +28,7 @@ __all__ = [
     "get_model_report_md",
     "save_model_report",
     "get_lora_info",
+    "recommend_models_for_gpu"
 
     # Core classes
     "HFModelLoader",
