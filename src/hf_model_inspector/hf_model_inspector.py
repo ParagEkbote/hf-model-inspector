@@ -21,11 +21,27 @@ def get_model_report_json(repo_id: str, token: Optional[str] = None) -> Dict[str
     if not config:
         raise ValueError(f"Could not load config.json for {repo_id}")
 
-    # Analyze from config files only
-    param_info = estimate_param_count(config,siblings)
-    quant_info = detect_quant_and_precision_from(config, model_info)
+    # Get siblings (list of files in the repo)
+    siblings = model_info.get("siblings", []) if model_info else []
+
+    # Analyze using the correct function signatures
+    param_count, param_method = estimate_param_count(repo_id, config, siblings)
+    quant_info = detect_quant_and_precision(
+        repo_id, 
+        config, 
+        siblings, 
+        load_json_quiet=loader.load_json_quiet
+    )
     tokenizer_info = analyze_tokenizer(tokenizer_config)
-    arch_info = extract_architecture(config)
+    arch_extras = extract_architecture_extras(config)
+
+    # Format parameter info
+    param_info = {
+        "total": param_count,
+        "total_millions": round(param_count / 1_000_000, 2) if param_count else None,
+        "total_billions": round(param_count / 1_000_000_000, 3) if param_count else None,
+        "estimation_method": param_method,
+    }
 
     return {
         "repo_id": repo_id,
@@ -34,14 +50,16 @@ def get_model_report_json(repo_id: str, token: Optional[str] = None) -> Dict[str
         "parameters": param_info,
         "quantization": quant_info,
         "tokenizer": tokenizer_info,
-        "architecture_details": arch_info,
+        "architecture_extras": arch_extras,
         "metadata": {
             "downloads": model_info.get("downloads", 0) if model_info else 0,
             "likes": model_info.get("likes", 0) if model_info else 0,
             "tags": model_info.get("tags", []) if model_info else [],
             "library": model_info.get("library_name") if model_info else None,
+            "pipeline_tag": model_info.get("pipeline_tag") if model_info else None,
         }
     }
+
 
 def get_model_report_md(repo_id: str, token: Optional[str] = None) -> str:
     """Return model report formatted as Markdown string."""

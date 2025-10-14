@@ -1,10 +1,7 @@
+#Todo: 1. Lora should not be downloaded, only configs should be printed
+# 2. fix token leakage issue and give error for diffusers.
 from typing import Dict, Any, Optional
-from huggingface_hub import (
-    HfApi,
-    hf_hub_download,
-    HfFolder,
-    whoami,
-)
+from huggingface_hub import HfApi, hf_hub_download, HfFolder, whoami
 import json
 import logging
 import subprocess
@@ -15,21 +12,15 @@ logger = logging.getLogger(__name__)
 
 def authenticate_hf(token: Optional[str] = None) -> str:
     """
-    Authenticate with Hugging Face Hub.
+    Authenticate with Hugging Face Hub securely.
 
     Priority:
     1. Use the provided token
     2. Use cached token from `hf auth login`
     3. Prompt interactive login if missing or invalid
 
-    Args:
-        token: Optional authentication token
-        
     Returns:
-        Valid authentication token
-        
-    Raises:
-        RuntimeError: If authentication fails
+        A valid Hugging Face token (kept private)
     """
     # 1. Direct token provided
     if token:
@@ -40,7 +31,7 @@ def authenticate_hf(token: Optional[str] = None) -> str:
     if cached_token:
         try:
             user_info = whoami(token=cached_token)
-            logger.info(f"Authenticated as: {user_info.get('name', 'unknown')}")  # ✅ Log username, not token
+            logger.info(f"Authenticated as: {user_info.get('name', 'unknown')}")
             return cached_token
         except Exception:
             logger.warning("Cached token invalid or expired. Re-authenticating...")
@@ -61,43 +52,22 @@ def authenticate_hf(token: Optional[str] = None) -> str:
     if not new_token:
         raise RuntimeError("Login unsuccessful. Please run `hf auth login` manually.")
     
-    logger.info("Successfully authenticated with Hugging Face")  # ✅ Don't log the token
+    logger.info("Successfully authenticated with Hugging Face (token kept private)")
     return new_token
 
 
 class HFModelLoader:
-    """Handles downloading and retrieving model files and metadata from Hugging Face Hub."""
+    """Secure loader for Hugging Face Hub models (metadata & JSON)."""
 
     def __init__(self, token: Optional[str] = None):
-        """
-        Initialize the model loader.
-        
-        Args:
-            token: Optional Hugging Face authentication token
-        """
         self.token = authenticate_hf(token)
         self.api = HfApi(token=self.token)
-        # Don't log token here either
 
     def fetch_model_info(self, repo_id: str) -> Optional[Dict[str, Any]]:
-        """
-        Fetch model information from Hugging Face Hub.
-        
-        Args:
-            repo_id: Repository ID (e.g., "gpt2" or "username/model-name")
-            
-        Returns:
-            Dictionary containing model metadata, or None if fetch fails
-        """
         try:
-            info = self.api.model_info(repo_id, token=self.token)  # Don't log this
-        except Exception as e:
-            error_msg = str(e).lower()
-            if "not found" in error_msg or "404" in error_msg:
-                logger.error(f"Repository not found: {repo_id}")
-            else:
-                # ✅ Don't include exception details that might contain tokens
-                logger.warning(f"Failed to fetch model info for {repo_id}")
+            info = self.api.model_info(repo_id, token=self.token)
+        except Exception:
+            logger.warning(f"Failed to fetch model info for repo: {repo_id}")
             return None
 
         return {
@@ -118,94 +88,56 @@ class HFModelLoader:
         }
 
     def load_json(self, repo_id: str, filename: str) -> Optional[Dict[str, Any]]:
-        """
-        Load a JSON file from a Hugging Face repository.
-        
-        Args:
-            repo_id: Repository ID
-            filename: Name of the JSON file to load
-            
-        Returns:
-            Parsed JSON content as dictionary, or None if loading fails
-        """
         try:
-            path = hf_hub_download(
-                repo_id=repo_id, 
-                filename=filename, 
-                token=self.token
-            )
-        except Exception as e:
-            logger.debug(f"Could not download {filename} from {repo_id}")  # ✅ Don't log exception details
+            path = hf_hub_download(repo_id=repo_id, filename=filename, token=self.token)
+        except Exception:
+            logger.debug(f"Could not download file '{filename}' from repo '{repo_id}'")
             return None
-            
+
         try:
             with open(path, "r", encoding="utf-8") as f:
                 return json.load(f)
         except (json.JSONDecodeError, FileNotFoundError):
-            logger.debug(f"Could not parse {filename}")
+            logger.debug(f"Could not parse JSON file '{filename}'")
             return None
 
     def load_json_quiet(self, repo_id: str, filename: str) -> Optional[Dict[str, Any]]:
-        """
-        Load JSON file without logging errors (alias for load_json).
-        
-        Args:
-            repo_id: Repository ID
-            filename: Name of the JSON file to load
-            
-        Returns:
-            Parsed JSON content as dictionary, or None if loading fails
-        """
         return self.load_json(repo_id, filename)
 
     def load_lora_info(self, repo_id: str) -> Optional[Dict[str, Any]]:
-        """
-        Load LoRA adapter metadata if available.
-        
-        Args:
-            repo_id: Repository ID
-            
-        Returns:
-            Dictionary with LoRA configuration and parameters, or None if not a LoRA model
-        """
         lora_info = {}
 
-        # Load config
+        # Load adapter config if exists
         for cfg_name in ["adapter_config.json", "lora_config.json"]:
             cfg = self.load_json_quiet(repo_id, cfg_name)
             if cfg:
                 lora_info.update(cfg)
                 break
 
-        # Collect .bin files
+        # Collect .bin files for parameter estimation
         model_info = self.fetch_model_info(repo_id)
         if not model_info:
             return None
-            
+
         siblings = model_info.get("siblings", [])
-        bin_files = [s for s in siblings if s.endswith(".bin")]
+        bin_files = [f for f in siblings if f.endswith(".bin")]
 
         if not lora_info and not bin_files:
             return None
 
-        # Estimate parameters from file sizes
         total_bytes = 0
         for bin_file in bin_files:
             try:
-                path = hf_hub_download(
-                    repo_id=repo_id, 
-                    filename=bin_file, 
-                    token=self.token
-                )
+                path = hf_hub_download(repo_id=repo_id, filename=bin_file, token=self.token)
                 total_bytes += os.path.getsize(path)
             except Exception:
-                logger.debug(f"Could not get size for {bin_file}")
+                logger.debug(f"Could not get size for file '{bin_file}'")
                 continue
 
         lora_info["estimated_parameters"] = total_bytes // 4
         lora_info["approx_precision_bytes"] = 4
 
-        # Add default values for common LoRA keys
+        # Add default keys
         for key in ["r", "alpha", "fan_in_fan_out", "target_modules"]:
             if key not in lora_info:
                 lora_info[key] = None
