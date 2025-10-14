@@ -67,7 +67,7 @@ def main():
     # 8️⃣ Test get_model_report_md
     print("\n8. Generating Markdown report...")
     try:
-        report_md = get_model_report_md(repo_id, token)
+        report_md = get_model_report_md(token)
         print(f"✓ Markdown report generated ({len(report_md)} chars)")
         print(f"\nPreview:\n{report_md[:200]}...")
     except Exception as e:

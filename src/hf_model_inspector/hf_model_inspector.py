@@ -10,25 +10,38 @@ from .formatter import format_markdown, save_outputs
 
 
 def get_model_report_json(repo_id: str, token: Optional[str] = None) -> Dict[str, Any]:
-    """Return structured model report as a dict."""
-    loader = HFModelLoader(repo_id=repo_id, token=token)
-    model, tokenizer = loader.load_model_and_tokenizer()
+    """Return structured model report as a dict (without downloading weights)."""
+    loader = HFModelLoader(token=token)
+    
+    # Fetch metadata and config files only (no model weights!)
+    model_info = loader.fetch_model_info(repo_id)
+    config = loader.load_json(repo_id, "config.json")
+    tokenizer_config = loader.load_json(repo_id, "tokenizer_config.json")
+    
+    if not config:
+        raise ValueError(f"Could not load config.json for {repo_id}")
 
-    # Core analysis
-    param_info = estimate_param_count(model)
-    quant_info = detect_quant_and_precision(model)
-    tokenizer_info = analyze_tokenizer(tokenizer)
-    arch_extras = extract_architecture_extras(model)
+    # Analyze from config files only
+    param_info = estimate_param_count(config,siblings)
+    quant_info = detect_quant_and_precision_from(config, model_info)
+    tokenizer_info = analyze_tokenizer(tokenizer_config)
+    arch_info = extract_architecture(config)
 
     return {
         "repo_id": repo_id,
-        "architecture": model.__class__.__name__,
+        "architecture": config.get("architectures", ["Unknown"])[0] if config.get("architectures") else "Unknown",
+        "model_type": config.get("model_type", "Unknown"),
         "parameters": param_info,
         "quantization": quant_info,
         "tokenizer": tokenizer_info,
-        "extras": arch_extras,
+        "architecture_details": arch_info,
+        "metadata": {
+            "downloads": model_info.get("downloads", 0) if model_info else 0,
+            "likes": model_info.get("likes", 0) if model_info else 0,
+            "tags": model_info.get("tags", []) if model_info else [],
+            "library": model_info.get("library_name") if model_info else None,
+        }
     }
-
 
 def get_model_report_md(repo_id: str, token: Optional[str] = None) -> str:
     """Return model report formatted as Markdown string."""

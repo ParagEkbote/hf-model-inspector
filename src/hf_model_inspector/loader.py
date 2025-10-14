@@ -39,10 +39,11 @@ def authenticate_hf(token: Optional[str] = None) -> str:
     cached_token = HfFolder.get_token()
     if cached_token:
         try:
-            _ = whoami(token=cached_token)
+            user_info = whoami(token=cached_token)
+            logger.info(f"Authenticated as: {user_info.get('name', 'unknown')}")  # ✅ Log username, not token
             return cached_token
-        except Exception as e:
-            logger.warning(f"Cached token invalid or expired. Re-authenticating... {e}")
+        except Exception:
+            logger.warning("Cached token invalid or expired. Re-authenticating...")
 
     # 3. Launch CLI login if token missing/invalid
     print("No valid Hugging Face login found. Launching `hf auth login`...")
@@ -52,13 +53,15 @@ def authenticate_hf(token: Optional[str] = None) -> str:
         raise RuntimeError(
             "Hugging Face CLI not found. Install via: pip install huggingface_hub"
         )
-    except subprocess.CalledProcessError as e:
-        raise RuntimeError(f"Login process failed or cancelled by user: {e}")
+    except subprocess.CalledProcessError:
+        raise RuntimeError("Login process failed or cancelled by user.")
 
     # 4. Try fetching the new token
     new_token = HfFolder.get_token()
     if not new_token:
         raise RuntimeError("Login unsuccessful. Please run `hf auth login` manually.")
+    
+    logger.info("Successfully authenticated with Hugging Face")  # ✅ Don't log the token
     return new_token
 
 
@@ -74,6 +77,7 @@ class HFModelLoader:
         """
         self.token = authenticate_hf(token)
         self.api = HfApi(token=self.token)
+        # Don't log token here either
 
     def fetch_model_info(self, repo_id: str) -> Optional[Dict[str, Any]]:
         """
@@ -86,13 +90,14 @@ class HFModelLoader:
             Dictionary containing model metadata, or None if fetch fails
         """
         try:
-            info = self.api.model_info(repo_id, token=self.token)
+            info = self.api.model_info(repo_id, token=self.token)  # Don't log this
         except Exception as e:
             error_msg = str(e).lower()
             if "not found" in error_msg or "404" in error_msg:
                 logger.error(f"Repository not found: {repo_id}")
             else:
-                logger.warning(f"Failed to fetch model info for {repo_id}: {e}")
+                # ✅ Don't include exception details that might contain tokens
+                logger.warning(f"Failed to fetch model info for {repo_id}")
             return None
 
         return {
@@ -130,14 +135,14 @@ class HFModelLoader:
                 token=self.token
             )
         except Exception as e:
-            logger.debug(f"Could not download {filename} from {repo_id}: {e}")
+            logger.debug(f"Could not download {filename} from {repo_id}")  # ✅ Don't log exception details
             return None
             
         try:
             with open(path, "r", encoding="utf-8") as f:
                 return json.load(f)
-        except (json.JSONDecodeError, FileNotFoundError) as e:
-            logger.debug(f"Could not parse {filename}: {e}")
+        except (json.JSONDecodeError, FileNotFoundError):
+            logger.debug(f"Could not parse {filename}")
             return None
 
     def load_json_quiet(self, repo_id: str, filename: str) -> Optional[Dict[str, Any]]:
@@ -193,8 +198,8 @@ class HFModelLoader:
                     token=self.token
                 )
                 total_bytes += os.path.getsize(path)
-            except Exception as e:
-                logger.debug(f"Could not get size for {bin_file}: {e}")
+            except Exception:
+                logger.debug(f"Could not get size for {bin_file}")
                 continue
 
         lora_info["estimated_parameters"] = total_bytes // 4
