@@ -31,7 +31,7 @@ Repository = "https://github.com/ParagEkbote/hf-model-inspector"
 Issues = "https://github.com/ParagEkbote/hf-model-inspector/issues"
 
 [tool.hatch.build.targets.wheel]
-packages = ["hf_model_inspector"]
+packages = ["src/hf_model_inspector"]
 
 [tool.ruff]
 line-length = 88
