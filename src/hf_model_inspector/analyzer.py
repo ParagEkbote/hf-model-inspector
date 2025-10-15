@@ -1,12 +1,12 @@
-from typing import Dict, Any, Optional, Tuple, List
 import logging
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
 
 def estimate_param_count(
-    repo_id: str, config: Optional[Dict], siblings: List[str]
-) -> Tuple[Optional[int], str]:
+    repo_id: str, config: Optional[dict], siblings: list[str]
+) -> tuple[Optional[int], str]:
     """
     Estimate parameter count for a model.
     Returns (param_count_estimate, method_description)
@@ -64,8 +64,8 @@ def estimate_param_count(
 
 
 def detect_quant_and_precision(
-    repo_id: str, config: Optional[Dict], siblings: List[str], load_json_quiet=None
-) -> Dict[str, Any]:
+    repo_id: str, config: Optional[dict], siblings: list[str], load_json_quiet=None
+) -> dict[str, Any]:
     """
     Detect quantization and precision.
 
@@ -111,7 +111,11 @@ def detect_quant_and_precision(
 
     # try config hints
     if result["precision"] == "unknown" and config:
-        cfg_dtype = config.get("torch_dtype") or config.get("dtype") or config.get("torch_dtype_str")
+        cfg_dtype = (
+            config.get("torch_dtype")
+            or config.get("dtype")
+            or config.get("torch_dtype_str")
+        )
         if isinstance(cfg_dtype, str):
             if "16" in cfg_dtype:
                 result["precision"] = "fp16"
@@ -123,7 +127,7 @@ def detect_quant_and_precision(
     return result
 
 
-def analyze_tokenizer(tokenizer: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+def analyze_tokenizer(tokenizer: Optional[dict[str, Any]]) -> dict[str, Any]:
     """Analyze tokenizer config."""
     if not tokenizer:
         return {"present": False}
@@ -155,7 +159,11 @@ def analyze_tokenizer(tokenizer: Optional[Dict[str, Any]]) -> Dict[str, Any]:
             info[info_key] = tokenizer[k]
 
     # special tokens
-    at = tokenizer.get("added_tokens") or tokenizer.get("added_tokens_decoder") or tokenizer.get("special_tokens_map")
+    at = (
+        tokenizer.get("added_tokens")
+        or tokenizer.get("added_tokens_decoder")
+        or tokenizer.get("special_tokens_map")
+    )
     if isinstance(at, dict):
         info["special_tokens"] = list(at.keys())
     elif isinstance(at, list):
@@ -172,7 +180,7 @@ def analyze_tokenizer(tokenizer: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     return info
 
 
-def extract_architecture_extras(config: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+def extract_architecture_extras(config: Optional[dict[str, Any]]) -> dict[str, Any]:
     """Extract additional model config information."""
     extras = {}
     if not config:
@@ -201,7 +209,10 @@ def extract_architecture_extras(config: Optional[Dict[str, Any]]) -> Dict[str, A
     norm_type = None
     if config.get("rms_norm") or "rms" in str(config.get("norm_type", "")).lower():
         norm_type = "RMSNorm"
-    elif "layer_norm" in str(config.get("norm_type", "")).lower() or "layernorm" in str(config.get("norm_type", "")).lower():
+    elif (
+        "layer_norm" in str(config.get("norm_type", "")).lower()
+        or "layernorm" in str(config.get("norm_type", "")).lower()
+    ):
         norm_type = "LayerNorm"
     elif "layer_norm_eps" in config:
         norm_type = "LayerNorm"

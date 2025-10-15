@@ -1,5 +1,6 @@
 from typing import Any, Optional
 
+
 def humanize_params(n: Optional[int]) -> str:
     """Convert a large integer param count into a human-readable format (e.g., 1.23B)."""
     if n is None:
@@ -11,6 +12,7 @@ def humanize_params(n: Optional[int]) -> str:
         k += 1
     return f"{n:.2f}{units[k]}"
 
+
 def safe_get(d: dict, *keys, default=None) -> Any:
     """Safely access nested dict keys: safe_get(cfg, 'a', 'b', 'c')."""
     for key in keys:
@@ -18,6 +20,7 @@ def safe_get(d: dict, *keys, default=None) -> Any:
             return default
         d = d[key]
     return d
+
 
 def field(cfg: dict, *names: str, default=None) -> Any:
     """Return the first existing non-None field from given names."""
