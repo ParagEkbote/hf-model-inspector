@@ -19,6 +19,7 @@ from .hf_model_inspector import (
     save_model_report,
 )
 from .loader import HFModelLoader
+from .utils import field, humanize_params, safe_get
 
 # Public API
 __all__ = [
@@ -34,4 +35,7 @@ __all__ = [
     "extract_architecture_extras",
     "format_markdown",  # Formatter
     "save_outputs",
+    "field",
+    "safe_get",
+    "humanize_params",
 ]
