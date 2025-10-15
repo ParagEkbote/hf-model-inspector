@@ -185,6 +185,6 @@ def save_outputs(content: str, filepath: str) -> None:
             f.write(content)
 
         logger.info(f"Successfully saved output to {filepath}")
-    except Exception as e:
-        logger.error(f"Failed to save output to {filepath}: {e}")
-        raise OSError(f"Could not write to {filepath}: {e}")
+    except Exception as err:
+        logger.error(f"Failed to save output to {filepath}")
+        raise OSError(f"Could not write to {filepath}") from err

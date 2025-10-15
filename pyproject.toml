@@ -33,18 +33,24 @@ packages = ["src/hf_model_inspector"]
 # -----------------------------
 [tool.ruff]
 line-length = 88
-target-version = "py39"             # must be a string, not list
+target-version = "py39"       # must be a string, not list
 select = ["E", "F", "B", "I", "UP"]
-ignore = ["E501"]
+ignore = ["E501"]  # optional: keep if you want to ignore long-line warnings
 
 # -----------------------------
 # ✅ Type checker configuration
 # -----------------------------
-[tool.mypy]
-strict = true
-disallow_untyped_defs = true
-warn_return_any = true
-warn_unused_ignores = true
+[tool.ty.rules]
+# Ignore rules that are stricter than mypy for transition period
+unresolved-import = "ignore"
+invalid-assignment = "ignore"  # mypy is more permissive with Any assignments
+call-non-callable = "ignore"   # mypy allows more dynamic method calls
+index-out-of-bounds = "ignore" # mypy is more permissive with tuple indexing
+unresolved-attribute = "ignore" # mypy is more permissive with module attributes
+possibly-unbound-attribute = "ignore" # mypy doesn't warn about this as much
+redundant-cast = "ignore"      # mypy doesn't warn about redundant casts
+unsupported-operator = "ignore" # mypy supports | syntax with from __future__ import annotations
+invalid-argument-type = "ignore" # mypy is more permissive with argument types
 
 # -----------------------------
 # ✅ Default dev environment

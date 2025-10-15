@@ -22,20 +22,16 @@ from .loader import HFModelLoader
 
 # Public API
 __all__ = [
-    # Main API
     "get_model_report_json",
-    "get_model_report_md",
+    "get_model_report_md",  # Main API
     "save_model_report",
     "get_lora_info",
-    "recommend_models_for_gpu"
-    # Core classes
-    "HFModelLoader",
-    # Analyzer
+    "recommend_models_for_gpu",
+    "HFModelLoader",  # Core classes
     "estimate_param_count",
-    "detect_quant_and_precision",
+    "detect_quant_and_precision",  # Analyzer
     "analyze_tokenizer",
     "extract_architecture_extras",
-    # Formatter
-    "format_markdown",
+    "format_markdown",  # Formatter
     "save_outputs",
 ]
