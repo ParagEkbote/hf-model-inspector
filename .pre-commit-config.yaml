@@ -20,7 +20,6 @@ repos:
         args: ["--profile=black", "--line-length=99"]
         files: ^(tests/.*|.*/predict\.py)$
 
-
   - repo: local
     hooks:
       - id: ty

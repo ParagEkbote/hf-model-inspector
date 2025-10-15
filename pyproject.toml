@@ -5,13 +5,11 @@ build-backend = "hatchling.build"
 [project]
 name = "hf-model-inspector"
 version = "0.1.0"
-description = "A package and gh-action to generate quality reports on Hugging Face model stats and usage, addressing ambiguity in open model releases."
+description = "A package and GitHub Action to generate quality reports on Hugging Face model stats and usage, addressing ambiguity in open model releases."
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "Apache-2.0" }
-authors = [
-  { name = "Parag Ekbote", email = "paragekbote23@gmail.com" }
-]
+authors = [{ name = "Parag Ekbote", email = "paragekbote23@gmail.com" }]
 dependencies = [
   "huggingface_hub>=0.24.0",
   "transformers>=4.21.0",
@@ -30,22 +28,31 @@ source-directories = ["src"]
 [tool.hatch.build.targets.wheel]
 packages = ["src/hf_model_inspector"]
 
+# -----------------------------
+# ✅ Ruff configuration (fixed)
+# -----------------------------
 [tool.ruff]
 line-length = 88
-target-version = ["py39"]
+target-version = "py39"             # must be a string, not list
 select = ["E", "F", "B", "I", "UP"]
-ignore = ["E501"]  # optional, keep if you want to ignore long-line warnings
+ignore = ["E501"]
 
-[tool.ty]
+# -----------------------------
+# ✅ Type checker configuration
+# -----------------------------
+[tool.mypy]
 strict = true
 disallow_untyped_defs = true
 warn_return_any = true
 warn_unused_ignores = true
 
+# -----------------------------
+# ✅ Default dev environment
+# -----------------------------
 [tool.hatch.envs.default]
 dependencies = [
   "ruff",
-  "ty",
+  "mypy",
   "pytest",
   "pytest-asyncio",
   "pre-commit",
@@ -57,3 +64,17 @@ lint = "ruff check src"
 format = "ruff format src"
 test = "pytest -v"
 precommit = "pre-commit run --all-files"
+
+# -----------------------------
+# ✅ Separate testing group
+# -----------------------------
+[tool.hatch.envs.test]
+dependencies = ["pytest", "pytest-cov", "pytest-asyncio", "mutatest"]
+[tool.hatch.envs.test.scripts]
+unit = "pytest tests/unit --cov=src/hf_model_inspector --cov-report=term-missing"
+integration = "pytest tests/integration --cov=src/hf_model_inspector --cov-report=term-missing"
+mutate = "mutatest --src src/hf_model_inspector --test tests/unit"
+
+# Optional CI convenience
+[tool.hatch.envs.test.env-vars]
+PYTHONWARNINGS = "ignore::DeprecationWarning"
