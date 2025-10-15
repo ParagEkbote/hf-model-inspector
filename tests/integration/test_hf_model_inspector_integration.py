@@ -3,6 +3,7 @@ import os
 import pytest
 
 from hf_model_inspector import (
+    get_lora_info,
     get_model_report_json,
     get_model_report_md,
     recommend_models_for_gpu,
@@ -99,5 +100,4 @@ def test_save_model_report(hf_token, test_repos):
 def test_recommend_models_for_gpu():
     gpu_specs = {"name": "RTX 3090", "memory_gb": 24}
     recommended = recommend_models_for_gpu(gpu_specs)
-    assert isinstance(recommended, list)
     assert isinstance(recommended, list)
