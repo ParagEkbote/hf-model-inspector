@@ -1,8 +1,9 @@
 import pytest
+
 from hf_model_inspector.analyzer import (
-    estimate_param_count,
-    detect_quant_and_precision,
     analyze_tokenizer,
+    detect_quant_and_precision,
+    estimate_param_count,
     extract_architecture_extras,
 )
 
@@ -95,9 +96,7 @@ class TestDetectQuantAndPrecision:
                 return {"method": "gptq", "bits": 4}
             return None
 
-        result = detect_quant_and_precision(
-            "repo/model", None, [], mock_load_json
-        )
+        result = detect_quant_and_precision("repo/model", None, [], mock_load_json)
         assert result["quantized"] is True
         assert "gptq" in result["quant_methods"]
 
@@ -107,9 +106,7 @@ class TestDetectQuantAndPrecision:
                 return {"quantization_method": "awq"}
             return None
 
-        result = detect_quant_and_precision(
-            "repo/model", None, [], mock_load_json
-        )
+        result = detect_quant_and_precision("repo/model", None, [], mock_load_json)
         assert result["quantized"] is True
         assert "awq" in result["quant_methods"]
 
@@ -178,9 +175,7 @@ class TestDetectQuantAndPrecision:
             return None
 
         siblings = ["model-awq.safetensors"]
-        result = detect_quant_and_precision(
-            "repo/model", None, siblings, mock_load_json
-        )
+        result = detect_quant_and_precision("repo/model", None, siblings, mock_load_json)
         assert result["quantized"] is True
         assert len(result["quant_methods"]) == 2
         assert "gptq" in result["quant_methods"]
@@ -204,24 +199,14 @@ class TestAnalyzeTokenizer:
         assert result["special_tokens"] == []
 
     def test_tokenizer_with_model_vocab_dict(self):
-        tokenizer = {
-            "model": {
-                "type": "BPE",
-                "vocab": {"hello": 0, "world": 1, "test": 2}
-            }
-        }
+        tokenizer = {"model": {"type": "BPE", "vocab": {"hello": 0, "world": 1, "test": 2}}}
         result = analyze_tokenizer(tokenizer)
         assert result["present"] is True
         assert result["type"] == "BPE"
         assert result["vocab_size"] == 3
 
     def test_tokenizer_with_model_vocab_list(self):
-        tokenizer = {
-            "model": {
-                "model_type": "WordPiece",
-                "vocab": ["[PAD]", "[UNK]", "[CLS]"]
-            }
-        }
+        tokenizer = {"model": {"model_type": "WordPiece", "vocab": ["[PAD]", "[UNK]", "[CLS]"]}}
         result = analyze_tokenizer(tokenizer)
         assert result["present"] is True
         assert result["type"] == "WordPiece"
@@ -291,10 +276,7 @@ class TestAnalyzeTokenizer:
 
     def test_full_tokenizer_config(self):
         tokenizer = {
-            "model": {
-                "type": "BPE",
-                "vocab": {"a": 0, "b": 1}
-            },
+            "model": {"type": "BPE", "vocab": {"a": 0, "b": 1}},
             "tokenizer_class": "GPT2Tokenizer",
             "model_max_length": 1024,
             "truncation": True,

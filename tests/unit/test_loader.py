@@ -1,7 +1,7 @@
 import json
 import subprocess
-from types import SimpleNamespace
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -42,7 +42,9 @@ def test_authenticate_hf_uses_cached_token(monkeypatch):
 def test_authenticate_hf_cli_missing(monkeypatch):
     # No cached token; subprocess.run raises FileNotFoundError
     monkeypatch.setattr(loader_mod.HfFolder, "get_token", lambda: None)
-    monkeypatch.setattr(subprocess, "run", lambda *a, **k: (_ for _ in ()).throw(FileNotFoundError()))
+    monkeypatch.setattr(
+        subprocess, "run", lambda *a, **k: (_ for _ in ()).throw(FileNotFoundError())
+    )
     with pytest.raises(RuntimeError) as exc:
         authenticate_hf()
     assert "Hugging Face CLI not found" in str(exc.value)
@@ -90,9 +92,14 @@ def test_fetch_model_info_success(monkeypatch):
 def test_fetch_model_info_diffusers_rejected(monkeypatch):
     monkeypatch.setattr(loader_mod, "authenticate_hf", lambda token=None: "tok")
     fake_info = SimpleNamespace(pipeline_tag="diffusers")
+
     class FakeApi:
-        def __init__(self, token=None): pass
-        def model_info(self, repo_id, token=None): return fake_info
+        def __init__(self, token=None):
+            pass
+
+        def model_info(self, repo_id, token=None):
+            return fake_info
+
     monkeypatch.setattr(loader_mod, "HfApi", FakeApi)
 
     loader = HFModelLoader(token=None)
@@ -106,7 +113,9 @@ def test_fetch_model_info_diffusers_rejected(monkeypatch):
 # -------------------------
 def test_load_json_download_failure(monkeypatch):
     monkeypatch.setattr(loader_mod, "authenticate_hf", lambda token=None: "tok")
-    monkeypatch.setattr(loader_mod, "hf_hub_download", lambda **kw: (_ for _ in ()).throw(Exception("nope")))
+    monkeypatch.setattr(
+        loader_mod, "hf_hub_download", lambda **kw: (_ for _ in ()).throw(Exception("nope"))
+    )
     loader = HFModelLoader(token=None)
     result = loader.load_json("some/repo", "config.json")
     assert result is None
@@ -120,7 +129,9 @@ def test_load_json_success(tmp_path, monkeypatch):
     p.write_text(json.dumps(data), encoding="utf-8")
 
     # Make hf_hub_download return that path
-    monkeypatch.setattr(loader_mod, "hf_hub_download", lambda repo_id, filename, token=None: str(p))
+    monkeypatch.setattr(
+        loader_mod, "hf_hub_download", lambda repo_id, filename, token=None: str(p)
+    )
     loader = HFModelLoader(token=None)
     loaded = loader.load_json("repo/x", "cfg.json")
     assert isinstance(loaded, dict)
@@ -136,7 +147,9 @@ def test_load_lora_info_no_config(monkeypatch):
     # load_json_quiet returns None
     monkeypatch.setattr(loader_mod.HFModelLoader, "load_json_quiet", lambda self, r, f: None)
     # fetch_model_info returns empty siblings
-    monkeypatch.setattr(loader_mod.HFModelLoader, "fetch_model_info", lambda self, r: {"siblings": []})
+    monkeypatch.setattr(
+        loader_mod.HFModelLoader, "fetch_model_info", lambda self, r: {"siblings": []}
+    )
     loader = HFModelLoader(token=None)
     assert loader.load_lora_info("no/lora") is None
 
@@ -148,7 +161,9 @@ def test_load_lora_info_with_config_and_siblings(monkeypatch):
     monkeypatch.setattr(loader_mod.HFModelLoader, "load_json_quiet", lambda self, r, f: {"r": 4})
 
     # fetch_model_info returns siblings (filenames only)
-    fake_fetch = lambda self, r: {"siblings": ["adapter_config.json", "a_weights.bin", "b.safetensors"]}
+    fake_fetch = lambda self, r: {
+        "siblings": ["adapter_config.json", "a_weights.bin", "b.safetensors"]
+    }
     monkeypatch.setattr(loader_mod.HFModelLoader, "fetch_model_info", fake_fetch)
 
     loader = HFModelLoader(token=None)
