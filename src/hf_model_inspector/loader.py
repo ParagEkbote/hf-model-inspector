@@ -135,4 +135,4 @@ class HFModelLoader:
                 lora_info[key] = None
 
         return lora_info
-        return lora_info
+

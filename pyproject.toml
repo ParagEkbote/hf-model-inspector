@@ -14,7 +14,6 @@ dependencies = [
   "huggingface_hub>=0.24.0",
   "transformers>=4.21.0",
   "python-dotenv>=1.0.0",
-  "rich>=13.9.0",
 ]
 
 [project.urls]

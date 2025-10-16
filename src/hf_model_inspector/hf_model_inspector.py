@@ -102,48 +102,59 @@ def get_lora_info(
     }
 
 
-def recommend_models_for_gpu(gpu_specs: dict[str, any]) -> list[str]:
+def recommend_models_for_gpu(gpu_specs: dict[str, Any]) -> list[str]:
     """
     Recommend model sizes/types based on GPU specs.
 
-    gpu_specs: {
-        "name": str,                # e.g., "A100", "RTX3090"
-        "memory_gb": int,           # VRAM in GB
-        "compute_capability": float # CUDA compute capability
-    }
+    Args:
+        gpu_specs: Dictionary with optional keys:
+            - name (str): GPU model name, e.g. "A100", "RTX 3090"
+            - memory_gb (int): GPU VRAM size
+            - compute_capability (float): CUDA compute capability (e.g., 6.1, 8.0)
 
-    Returns a list of recommended model "size" categories.
+    Returns:
+        list[str]: Recommended model size categories (small, medium, large)
     """
     memory_gb = gpu_specs.get("memory_gb", 8)
     compute_cap = gpu_specs.get("compute_capability", 7.0)
     gpu_name = gpu_specs.get("name", "").lower()
 
-    recommendations = []
+    recommendations: list[str] = []
 
-    # Low memory GPUs (8–12GB)
+    # 🧠 Base recommendation by memory size
     if memory_gb < 12:
-        recommendations.append("small")  # e.g., distilled or tiny models
-    # Mid-range GPUs (12–24GB)
-    if 12 <= memory_gb < 24:
-        recommendations.append("medium")  # e.g., base LLMs, 3–7B models
-    # High-end GPUs (24GB+)
-    if memory_gb >= 24:
-        recommendations.append("large")  # e.g., 13B+ models or multi-GPU setups
+        recommendations.append("small")
+    elif 12 <= memory_gb < 24:
+        recommendations.append("medium")
+    else:
+        recommendations.append("large")
 
-    # Adjust recommendations by GPU type
-    if "a100" in gpu_name or "h100" in gpu_name:
-        # Tensor core GPUs: can handle larger models efficiently
+    # ⚙️ Adjust based on compute capability
+    if compute_cap < 7.0:
+        # Pre-Volta GPUs (Pascal and older)
+        recommendations = ["small"]
+    elif 7.0 <= compute_cap < 8.0:
+        # Volta / Turing
+        if "large" in recommendations:
+            recommendations.remove("large")
+    elif compute_cap >= 8.0:
+        # Ampere / Hopper architectures
         if "medium" not in recommendations:
             recommendations.append("medium")
         if "large" not in recommendations:
             recommendations.append("large")
-    elif "rtx" in gpu_name or "v100" in gpu_name:
-        # Consumer/older GPUs: mostly small or medium
+
+    # 💡 Fine-tune based on GPU name
+    if "a100" in gpu_name or "h100" in gpu_name:
+        # Enterprise GPUs
+        recommendations = ["medium", "large"]
+    elif "rtx" in gpu_name and memory_gb < 24:
+        # Consumer RTX cards (e.g., 3060, 3080)
         if "large" in recommendations:
             recommendations.remove("large")
 
-    # Always include a fallback
+    # 🛡️ Always include fallback
     if not recommendations:
         recommendations.append("small")
 
-    return recommendations
+    return sorted(set(recommendations))
