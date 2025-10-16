@@ -1,0 +1,163 @@
+[build-system]
+requires = ["hatchling>=1.22.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "hf-model-inspector"
+version = "1.0.2"
+description = "A package and GitHub Action to generate quality reports on Hugging Face model stats and usage, addressing ambiguity in open model releases."
+readme = { file = "README.md", content-type = "text/markdown" }
+requires-python = ">=3.9"
+license = { text = "Apache-2.0" }
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Programming Language :: Python :: 3.10",
+    "License :: OSI Approved :: MIT License"
+]
+
+authors = [{ name = "Parag Ekbote", email = "paragekbote23@gmail.com" }]
+dependencies = [
+  "huggingface_hub>=0.24.0",
+  "transformers>=4.21.0",
+  "python-dotenv>=1.0.0",
+]
+
+[project.urls]
+homepage = "https://github.com/ParagEkbote/hf-model-inspector"
+repository = "https://github.com/ParagEkbote/hf-model-inspector"
+issues = "https://github.com/ParagEkbote/hf-model-inspector/issues"
+
+# -----------------------------
+# Build configuration
+# -----------------------------
+[tool.hatch.build]
+source-directories = ["src"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/hf_model_inspector"]
+
+# -----------------------------
+# Black configuration
+# -----------------------------
+[tool.black]
+line-length = 99
+skip-string-normalization = true
+target-version = ["py39"]
+include = '(tests/.*|.*/predict\.py)$'
+
+# -----------------------------
+# isort configuration
+# -----------------------------
+[tool.isort]
+profile = "black"
+line_length = 99
+skip_gitignore = true
+
+
+# -----------------------------
+# Type checker configuration
+# -----------------------------
+[tool.ty.rules]
+unresolved-import = "ignore"
+invalid-assignment = "ignore"
+call-non-callable = "ignore"
+index-out-of-bounds = "ignore"
+unresolved-attribute = "ignore"
+redundant-cast = "ignore"
+unsupported-operator = "ignore"
+invalid-argument-type = "ignore"
+
+# -----------------------------
+# Mutmut configuration
+# -----------------------------
+[tool.mutmut]
+paths_to_mutate = ["src/"]
+pytest_add_cli_args_test_selection = ["tests/"]
+
+# -----------------------------
+# Default environment (minimal)
+# -----------------------------
+[tool.hatch.envs.default]
+dependencies = []
+
+# -----------------------------
+# Testing environment
+# -----------------------------
+[tool.hatch.envs.test]
+dependencies = [
+  "pytest>=7.0.0",
+  "pytest-cov>=4.0.0",
+  "pytest-asyncio>=0.21.0",
+]
+
+[tool.hatch.envs.test.scripts]
+all = "pytest tests/ -v --cov=src/hf_model_inspector --cov-report=term-missing"
+unit = "pytest tests/unit -v --cov=src/hf_model_inspector --cov-report=term-missing"
+integration = "pytest tests/integration -v --cov=src/hf_model_inspector --cov-report=term-missing"
+quick = "pytest tests/ -v"
+
+[tool.hatch.envs.test.env-vars]
+PYTHONWARNINGS = "ignore::DeprecationWarning"
+
+# -----------------------------
+# Linting environment
+# -----------------------------
+[tool.hatch.envs.lint]
+detached = true
+dependencies = [
+  "black>=25.1.0",
+  "flake8>=7.3.0",
+  "isort>=6.0.1",
+  "ty>=0.0.1a20",
+  "pre-commit>=3.0.0",
+]
+
+[tool.hatch.envs.lint.scripts]
+black-check = "black --check --line-length=99 --skip-string-normalization tests/ src/"
+black-fix = "black --line-length=99 --skip-string-normalization tests/ src/"
+flake = "flake8 --max-line-length=99 --ignore=D204,D401,E203,W503 tests/ src/"
+isort-check = "isort --check-only --profile=black --line-length=99 tests/ src/"
+isort-fix = "isort --profile=black --line-length=99 tests/ src/"
+typecheck = "ty check"
+check = [
+  "black-check",
+  "isort-check",
+  "flake8",
+  "ty",
+]
+fix = [
+  "black-fix",
+  "isort-fix",
+]
+precommit = "pre-commit run --all-files"
+
+# -----------------------------
+# Mutation testing environment
+# -----------------------------
+[tool.hatch.envs.mutation]
+dependencies = [
+  "mutmut>=2.0.0",
+  "pytest>=7.0.0",
+]
+
+[tool.hatch.envs.mutation.scripts]
+run = "mutmut run"
+results = "mutmut results"
+html = "mutmut html"
+
+# -----------------------------
+# Publishing environment
+# -----------------------------
+[tool.hatch.envs.publish]
+detached = true
+dependencies = [
+  "twine>=4.0.0",
+  "build>=1.0.0",
+]
+
+[tool.hatch.envs.publish.scripts]
+build = "python -m build"
+upload = "twine upload dist/*"
+check = "twine check dist/*"
