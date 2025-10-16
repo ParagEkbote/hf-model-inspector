@@ -79,27 +79,45 @@ def save_model_report(
     save_outputs(md_report, md_path or f"{repo_id.replace('/', '_')}_report.md")
 
 
-def get_lora_info(
-    repo_id: str, token: Optional[str] = None
-) -> Optional[dict[str, Any]]:
-    """Fetch LoRA-specific information for a given model."""
-    loader = HFModelLoader(repo_id=repo_id, token=token)
-    model, _ = loader.load_model_and_tokenizer()
+def get_lora_info(repo_id: str, token: Optional[str] = None) -> Optional[dict[str, Any]]:
+    """
+    Fetch detailed LoRA configuration for a given model repository.
 
-    # Simple heuristic for LoRA adapters
-    lora_modules = {
-        name: str(param.dtype)
-        for name, param in model.named_parameters()
-        if "lora" in name.lower()
-    }
+    Returns:
+        A dictionary containing LoRA adapter parameters (e.g., lora_alpha, r, target_modules)
+        or None if no LoRA configuration is found.
+    """
+    loader = HFModelLoader(token=token)
+    lora_cfg = loader.load_lora_info(repo_id)
 
-    if not lora_modules:
+    if not lora_cfg:
         return None
 
-    return {
-        "num_lora_modules": len(lora_modules),
-        "lora_module_names": list(lora_modules.keys()),
+    # Normalize & summarize key LoRA parameters
+    summary = {
+        "repo_id": repo_id,
+        "peft_type": lora_cfg.get("peft_type", "LORA"),
+        "task_type": lora_cfg.get("task_type", "Unknown"),
+        "base_model_name_or_path": lora_cfg.get("base_model_name_or_path"),
+        "r": lora_cfg.get("r"),
+        "lora_alpha": lora_cfg.get("lora_alpha"),
+        "lora_dropout": lora_cfg.get("lora_dropout", 0),
+        "bias": lora_cfg.get("bias"),
+        "fan_in_fan_out": lora_cfg.get("fan_in_fan_out", False),
+        "use_dora": lora_cfg.get("use_dora", False),
+        "use_qalora": lora_cfg.get("use_qalora", False),
+        "use_rslora": lora_cfg.get("use_rslora", False),
+        "target_modules": lora_cfg.get("target_modules", []),
+        "auto_mapping": lora_cfg.get("auto_mapping", {}),
+        "rank_pattern": lora_cfg.get("rank_pattern", {}),
+        "alpha_pattern": lora_cfg.get("alpha_pattern", {}),
+        "megatron_core": lora_cfg.get("megatron_core", None),
+        "qalora_group_size": lora_cfg.get("qalora_group_size", None),
+        "approx_precision_bytes": lora_cfg.get("approx_precision_bytes", 4),
+        "estimated_parameters": lora_cfg.get("estimated_parameters", 0),
     }
+
+    return summary
 
 
 def recommend_models_for_gpu(gpu_specs: dict[str, Any]) -> list[str]:

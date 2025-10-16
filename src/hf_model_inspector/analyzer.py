@@ -3,37 +3,14 @@ from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
-
 def estimate_param_count(
     _repo_id: str, config: Optional[dict], siblings: list[str]
-) -> tuple[Optional[int], str]:
+) -> tuple[int, str]:
     """
     Estimate parameter count for a model.
     Returns (param_count_estimate, method_description)
     """
-    if siblings:
-        joined = " ".join(siblings).lower()
-        bytes_per_param = 2  # mark as intentionally unused
-        if "fp16" in joined or "float16" in joined or "bf16" in joined:
-            precision = "fp16/bf16"
-        elif "fp8" in joined:
-            precision = "fp8"
-        elif "int8" in joined or "int4" in joined or "gptq" in joined:
-            precision = "int"
-        else:
-            precision = "unknown"
-            if config:
-                cfg_dtype = config.get("torch_dtype") or config.get("dtype")
-                if isinstance(cfg_dtype, str):
-                    if "16" in cfg_dtype:
-                        precision = "fp16"
-                    elif "8" in cfg_dtype:
-                        precision = "fp8_or_int"
-                    elif "32" in cfg_dtype:
-                        precision = "fp32"
-
-        return None, f"shard_size_sum ({precision})"
-
+    # Try to estimate from config values first
     if config:
         try:
             h = config.get("hidden_size") or config.get("d_model") or 0
@@ -45,73 +22,192 @@ def estimate_param_count(
         except Exception:
             pass
 
-    return None, "unknown"
+    # Fallback: check siblings for precision hints
+    if siblings:
+        joined = " ".join(siblings).lower()
+        if "fp16" in joined or "float16" in joined or "bf16" in joined:
+            precision = "fp16/bf16"
+        elif "fp8" in joined:
+            precision = "fp8"
+        elif "int8" in joined or "int4" in joined or "gptq" in joined:
+            precision = "int"
+        else:
+            precision = "unknown"
 
+        return 0, f"shard_size_sum ({precision})"
+
+    return 0, "unknown"
 
 
 def detect_quant_and_precision(
     repo_id: str, config: Optional[dict], siblings: list[str], load_json_quiet=None
 ) -> dict[str, Any]:
     """
-    Detect quantization and precision.
+    Detect quantization and precision from HuggingFace Hub models.
 
     Returns:
       {
           "quantized": bool,
           "quant_methods": [...],
-          "precision": "fp16|bf16|fp8|int8|unknown"
+          "precision": "fp16|bf16|fp8|int8|int4|fp32|unknown"
       }
     """
     result = {"quantized": False, "quant_methods": [], "precision": "unknown"}
+    methods_found = set()
 
-    # check quantization config if loader function provided
+    # 1. Check quantization config
     if load_json_quiet:
-        qconf = load_json_quiet(repo_id, "quantization_config.json")
-        if qconf:
-            result["quantized"] = True
-            m = qconf.get("method") or qconf.get("quantization_method")
-            result["quant_methods"].append(m or "unknown")
+        qconf = None
+        for fname in ["quantization_config.json", "config.json"]:
+            qconf = load_json_quiet(repo_id, fname)
+            if qconf:
+                # Look for quantization_config nested object
+                if "quantization_config" in qconf:
+                    qconf = qconf["quantization_config"]
+                
+                # Check for quantization indicators
+                if qconf.get("quant_method") or qconf.get("quantization_method") or qconf.get("method"):
+                    result["quantized"] = True
+                    method = (qconf.get("quant_method") or 
+                             qconf.get("quantization_method") or 
+                             qconf.get("method") or "unknown")
+                    methods_found.add(method.lower())
+                
+                # Check for bits field (common in quantized models)
+                if qconf.get("bits"):
+                    result["quantized"] = True
+                    bits = qconf.get("bits")
+                    if bits == 4:
+                        methods_found.add("4bit")
+                    elif bits == 8:
+                        methods_found.add("8bit")
+                
+                # Check for load_in_4bit or load_in_8bit
+                if qconf.get("load_in_4bit") or qconf.get("load_in_8bit"):
+                    result["quantized"] = True
+                    methods_found.add("bitsandbytes")
+                
+                # Check for torchao and quanto specific fields
+                if qconf.get("quantization_scheme") or qconf.get("activations") or qconf.get("weights"):
+                    result["quantized"] = True
+                    # torchao often has 'quantization_scheme' field
+                    if qconf.get("quantization_scheme"):
+                        methods_found.add("torchao")
+                
+                # Quanto detection
+                if qconf.get("quanto") or (qconf.get("method") and "quanto" in str(qconf.get("method")).lower()):
+                    result["quantized"] = True
+                    methods_found.add("quanto")
+                
+                # Get precision from config
+                dtype = qconf.get("dtype") or qconf.get("torch_dtype")
+                if isinstance(dtype, str):
+                    result["precision"] = _parse_dtype(dtype)
+                
+                break
 
-    # filename hints
+    # 2. Check main config for quantization hints
+    if config:
+        # Check for quantization_config in main config
+        if "quantization_config" in config:
+            result["quantized"] = True
+            qc = config["quantization_config"]
+            method = (qc.get("quant_method") or 
+                     qc.get("quantization_method") or 
+                     qc.get("method"))
+            if method:
+                methods_found.add(method.lower())
+        
+        # Check for other quantization indicators
+        if config.get("quantization_method"):
+            result["quantized"] = True
+            methods_found.add(config["quantization_method"].lower())
+        
+        # Check for bits field
+        if config.get("bits") or config.get("quantization_bits"):
+            result["quantized"] = True
+            bits = config.get("bits") or config.get("quantization_bits")
+            if bits == 4:
+                methods_found.add("4bit")
+            elif bits == 8:
+                methods_found.add("8bit")
+
+    # 3. Filename-based detection (more comprehensive)
     joined = " ".join(siblings).lower() if siblings else ""
-    for method, keywords in {
-        "gptq": ["gptq"],
-        "bitsandbytes": ["bnb", "bitsandbytes"],
-        "awq": ["awq"],
-    }.items():
+    
+    # Enhanced quantization method detection
+    method_patterns = {
+        "gptq": ["gptq", "gptq-int4", "gptq-int8"],
+        "awq": ["awq", "awq-int4"],
+        "bitsandbytes": ["bnb", "bitsandbytes", "8bit", "4bit"],
+        "gguf": ["gguf", ".gguf"],
+        "ggml": ["ggml", ".ggml"],
+        "exl2": ["exl2", "exllamav2"],
+        "squeezellm": ["squeezellm"],
+        "eetq": ["eetq"],
+        "hqq": ["hqq", "half-quadratic"],
+        "marlin": ["marlin"],
+        "torchao": ["torchao", "torch-ao", "ao_quant"],
+        "quanto": ["quanto"],
+    }
+    
+    for method, keywords in method_patterns.items():
         if any(k in joined for k in keywords):
             result["quantized"] = True
-            result["quant_methods"].append(method)
+            methods_found.add(method)
 
-    # detect precision by filename
-    for p, keywords in {
-        "fp16": ["fp16", "float16"],
-        "bf16": ["bf16"],
-        "fp8": ["fp8"],
-        "int8": ["int8"],
-        "int4": ["int4"],
-    }.items():
-        if any(k in joined for k in keywords):
-            result["precision"] = p
-            break
+    # 4. Detect precision by filename
+    if result["precision"] == "unknown":
+        precision_patterns = {
+            "fp16": ["fp16", "float16", "f16"],
+            "bf16": ["bf16", "bfloat16"],
+            "fp8": ["fp8", "float8"],
+            "int8": ["int8", "8bit", "w8"],
+            "int4": ["int4", "4bit", "w4"],
+            "fp32": ["fp32", "float32", "f32"],
+        }
+        
+        for prec, keywords in precision_patterns.items():
+            if any(k in joined for k in keywords):
+                result["precision"] = prec
+                break
 
-    # try config hints
+    # 5. Fallback: check config for precision
     if result["precision"] == "unknown" and config:
-        cfg_dtype = (
-            config.get("torch_dtype")
-            or config.get("dtype")
-            or config.get("torch_dtype_str")
-        )
+        cfg_dtype = (config.get("torch_dtype") or 
+                    config.get("dtype") or 
+                    config.get("torch_dtype_str"))
         if isinstance(cfg_dtype, str):
-            if "16" in cfg_dtype:
-                result["precision"] = "fp16"
-            elif "8" in cfg_dtype:
-                result["precision"] = "fp8"
-            elif "32" in cfg_dtype:
-                result["precision"] = "fp32"
+            result["precision"] = _parse_dtype(cfg_dtype)
+
+    # 6. Clean up and deduplicate methods
+    result["quant_methods"] = sorted(list(methods_found)) if methods_found else []
+    
+    # If no methods found but quantized flag is set, add "unknown"
+    if result["quantized"] and not result["quant_methods"]:
+        result["quant_methods"] = ["unknown"]
 
     return result
 
+
+def _parse_dtype(dtype_str: str) -> str:
+    """Parse dtype string to precision label."""
+    dtype_str = dtype_str.lower()
+    
+    if "bfloat16" in dtype_str or "bf16" in dtype_str:
+        return "bf16"
+    elif "float16" in dtype_str or "fp16" in dtype_str:
+        return "fp16"
+    elif "float8" in dtype_str or "fp8" in dtype_str:
+        return "fp8"
+    elif "int8" in dtype_str:
+        return "int8"
+    elif "int4" in dtype_str:
+        return "int4"
+    elif "float32" in dtype_str or "fp32" in dtype_str:
+        return "fp32"
+    
+    return "unknown"
 
 def analyze_tokenizer(tokenizer: Optional[dict[str, Any]]) -> dict[str, Any]:
     """Analyze tokenizer config."""
