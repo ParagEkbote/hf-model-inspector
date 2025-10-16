@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "hf-model-inspector"
-version = "1.0.2"
+version = "1.2.2"
 description = "A package and GitHub Action to generate quality reports on Hugging Face model stats and usage, addressing ambiguity in open model releases."
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.9"
@@ -14,7 +14,7 @@ classifiers = [
     "Intended Audience :: Developers",
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Programming Language :: Python :: 3.10",
-    "License :: OSI Approved :: MIT License"
+    "License :: OSI Approved :: Apache Software License",
 ]
 
 authors = [{ name = "Parag Ekbote", email = "paragekbote23@gmail.com" }]

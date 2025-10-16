@@ -77,32 +77,6 @@ print("Markdown report saved as 'model_report.md'")
 
 ---
 
-## GitHub Action Integration
-
-You can automate model reporting on every push or PR using our GitHub Action:
-
-```yaml
-name: HF Model Inspector
-
-on:
-  push:
-    branches: [main]
-
-jobs:
-  inspect:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Run HF Model Inspector
-        uses: ParagEkbote/hf-model-inspector@v1.0.0
-        with:
-          repo_id: "openai/gpt-oss-20b"
-          token: ${{ secrets.HF_TOKEN }}
-```
-
-This will automatically generate and store **JSON/Markdown reports** for your chosen model.
-
----
 
 ## Features
 
