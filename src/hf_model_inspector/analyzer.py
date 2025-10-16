@@ -5,32 +5,21 @@ logger = logging.getLogger(__name__)
 
 
 def estimate_param_count(
-    repo_id: str, config: Optional[dict], siblings: list[str]
+    _repo_id: str, config: Optional[dict], siblings: list[str]
 ) -> tuple[Optional[int], str]:
     """
     Estimate parameter count for a model.
     Returns (param_count_estimate, method_description)
-
-    Strategy:
-      1. Try index.json parsing (preferred, if available)
-      2. Sum shard file sizes and convert to parameter estimate using dtype heuristics
-      3. Fallback to config-based heuristic
     """
-    # Fallback since index.json parsing not implemented in this module
-    # 2) sum shard bytes
-    bytes_total = 0
     if siblings:
         joined = " ".join(siblings).lower()
-        bytes_per_param = 2  # default
+        bytes_per_param = 2  # mark as intentionally unused
         if "fp16" in joined or "float16" in joined or "bf16" in joined:
             precision = "fp16/bf16"
-            bytes_per_param = 2
         elif "fp8" in joined:
             precision = "fp8"
-            bytes_per_param = 1
         elif "int8" in joined or "int4" in joined or "gptq" in joined:
             precision = "int"
-            bytes_per_param = 1
         else:
             precision = "unknown"
             if config:
@@ -38,17 +27,13 @@ def estimate_param_count(
                 if isinstance(cfg_dtype, str):
                     if "16" in cfg_dtype:
                         precision = "fp16"
-                        bytes_per_param = 2
                     elif "8" in cfg_dtype:
                         precision = "fp8_or_int"
-                        bytes_per_param = 1
                     elif "32" in cfg_dtype:
                         precision = "fp32"
-                        bytes_per_param = 4
-        # Estimation cannot actually sum file sizes here, so returning None
+
         return None, f"shard_size_sum ({precision})"
 
-    # 3) fallback: config heuristics
     if config:
         try:
             h = config.get("hidden_size") or config.get("d_model") or 0
@@ -61,6 +46,7 @@ def estimate_param_count(
             pass
 
     return None, "unknown"
+
 
 
 def detect_quant_and_precision(
