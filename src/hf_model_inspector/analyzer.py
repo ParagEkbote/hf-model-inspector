@@ -34,9 +34,9 @@ def estimate_param_count(
         else:
             precision = "unknown"
 
-        return 0, f"shard_size_sum ({precision})"
+        return None, f"shard_size_sum ({precision})"
 
-    return 0, "unknown"
+    return None, "unknown"
 
 
 def detect_quant_and_precision(
@@ -159,8 +159,8 @@ def detect_quant_and_precision(
     # 4. Detect precision by filename
     if result["precision"] == "unknown":
         precision_patterns = {
+            "bf16": ["bf16", "bfloat16"], 
             "fp16": ["fp16", "float16", "f16"],
-            "bf16": ["bf16", "bfloat16"],
             "fp8": ["fp8", "float8"],
             "int8": ["int8", "8bit", "w8"],
             "int4": ["int4", "4bit", "w4"],
@@ -211,9 +211,12 @@ def _parse_dtype(dtype_str: str) -> str:
 
 def analyze_tokenizer(tokenizer: Optional[dict[str, Any]]) -> dict[str, Any]:
     """Analyze tokenizer config."""
-    if not tokenizer:
+    if not tokenizer is None:
         return {"present": False}
 
+    if isinstance(tokenizer, dict) and not tokenizer:
+        return {"present": True, "vocab_size": 0, "type": None}
+        
     info = {
         "present": True,
         "type": None,

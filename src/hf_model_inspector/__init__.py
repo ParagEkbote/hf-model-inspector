@@ -18,6 +18,7 @@ from .hf_model_inspector import (
     recommend_models_for_gpu,
     save_model_report,
 )
+
 from .loader import HFModelLoader
 from .utils import field, humanize_params, safe_get
 
